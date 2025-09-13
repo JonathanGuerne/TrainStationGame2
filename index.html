@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TRAIN GAME</title>
+    <link rel="stylesheet" href="./style.css" />
+    <link
+      rel="stylesheet"
+      href="./node_modules/@picocss/pico/css/pico.orange.min.css"
+    />
+  </head>
+  <body>
+    <main class="container">
+      <article id="intro-article">
+        <header>
+          <h1>TRAIN GAME <span id="game-icon">🚂</span></h1>
+        </header>
+        <section>
+          <h2>Welcome</h2>
+          <p>Welcome to the TRAIN GAME!</p>
+        </section>
+        <section>
+          <h2>About the Game</h2>
+          <p>
+            Imagine this: you have a full day ahead of you with nothing planned
+            <i>(Yes I know, bear with me)</i>. This game is perfect solution for
+            such a day <i>(if it really existed)</i>. What you will need ?
+            Ideally a daily pass for train
+            <i
+              >Yes it works also with a yearly pass, thanks for reminding me you
+              got one...</i
+            >
+            The rest is quite simple for you, because you have nothing to do
+            expect following the journey planned by the game from station to
+            station.
+          </p>
+          <p>
+            <b>But how does it works?</b> Glad you asked! The game will look at
+            your current location and find the closest train station. From there
+            it will pick a departing train from the coming hour and a random
+            station for you to disembark. Once you arrive at your destination,
+            the game will repeat the process.
+          </p>
+          <p>
+            How far away will you get? Will you end up in a city or in the
+            middle of nowhere? <i>Will you end up in the town next door?</i> All
+            bets are off at this point and that is the beauty of the game!
+          </p>
+        </section>
+        <section>
+          <h2>Getting Started</h2>
+          <p>
+            If you are ready to <i><b>embark</b></i> on this adventure, click
+            the button below to begin. <i>choo choo!</i>
+          </p>
+          <button id="btn-intro">All Aboard!</button>
+        </section>
+        <footer>
+          <p>May the rails be with you!</p>
+        </footer>
+      </article>
+
+      <article id="game-article" hidden>
+        <header>
+          <h1>TRAIN GAME <span id="game-icon">🚂</span></h1>
+        </header>
+        <section>
+          <button id="btn-back-intro">Take me back!</button>
+          <button id="btn-reload-train">Reload Train</button>
+          <button id="btn-clear-journey">Clear My Journey</button>
+          <h2>All Aboard!</h2>
+        </section>
+        <section>
+          <h2>Game Instructions</h2>
+          <p>Follow the on-screen instructions to take your next train.</p>
+        </section>
+        <section id="train-details-section" hidden>
+          <p>From: <div id="departure-station"></div> at <div id="departure-time"></div> on platform <div id="departure-platform"></div></p>
+          <p>To: <div id="arrival-station"></div> at <div id="arrival-time"></div> on platform <div id="arrival-platform"></div></p>
+          <button id="btn-validate-train">I boarded the train!</button>
+        </section>
+        <section id="error-section" hidden>
+          <h2>Error</h2>
+          <p id="error-message"></p>
+        </section>
+        <section id="loading-section">
+          <h2>Loading...</h2>
+          <p>Please wait while we fetch your next train details.</p>
+        </section>
+        <section id="journey-info-section">
+          <h2>Your Journey So Far</h2>
+          <ul id="journey-info-list">
+            <!-- Journey details will be appended here -->
+          </ul>
+        </section>
+        <footer>
+          <p>May the rails be with you!</p>
+        </footer>
+      </article>
+    </main>
+    <footer>
+      <p>&copy; 2025 TRAIN GAME</p>
+    </footer>
+  </body>
+  <script type="module" src="./src/index.ts"></script>
+</html>
