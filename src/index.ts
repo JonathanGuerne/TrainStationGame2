@@ -523,6 +523,25 @@ loadSettingsIntoUI();
 // SIMULATION UI HELPERS
 // ============================================================
 
+const LAST_SIMULATION_STATION_KEY = "lastSimulationStation";
+
+function saveLastSimulationStation(stationName: string): void {
+  try {
+    localStorage.setItem(LAST_SIMULATION_STATION_KEY, stationName);
+  } catch (error) {
+    console.warn("Failed to save last simulation station", error);
+  }
+}
+
+function getLastSimulationStation(): string | null {
+  try {
+    return localStorage.getItem(LAST_SIMULATION_STATION_KEY);
+  } catch (error) {
+    console.warn("Failed to retrieve last simulation station", error);
+    return null;
+  }
+}
+
 type PreparedSimulationInput = {
   startStationName: string;
   startDate: Date;
@@ -878,6 +897,11 @@ function resetSimulationForm(): void {
   }
   setButtonDisabled(btnExportCsv, true);
   showSimulationFormSection();
+  // Restore the last station name if available
+  const lastStation = getLastSimulationStation();
+  if (lastStation && simStartStationInput) {
+    simStartStationInput.value = lastStation;
+  }
   simStartStationInput?.focus();
 }
 
@@ -889,6 +913,11 @@ function openSimulationArticle(): void {
   hideSimulationFeedbackSections();
   setElementHidden(simulationConfigSection, false);
   setButtonDisabled(btnExportCsv, latestSimulationResults.length === 0);
+  // Restore the last station name if available
+  const lastStation = getLastSimulationStation();
+  if (lastStation && simStartStationInput) {
+    simStartStationInput.value = lastStation;
+  }
   simStartStationInput?.focus();
 }
 
@@ -914,6 +943,8 @@ async function handleSimulationFormSubmit(event: SubmitEvent): Promise<void> {
     showSimulationErrorState(getSimulationErrorMessage(error));
     return;
   }
+
+  saveLastSimulationStation(preparedInput.startStationName);
 
   const simulationStartedAt = performance.now();
   const requestId = activeSimulationRequestId + 1;

@@ -40,7 +40,11 @@ BASELINE_HYPERPARAMS = {
     "uniqueMeanOfTransportFactor": 0.4,
     "alreadyVisitedLegFactor": 0.05,
     "alreadySteppedInFactor": 0.2,
+    "preferredCategoryFactor": 0.4,
+    "shortJourneyLegPenalty": 0.7,
 }
+
+PREFERRED_CATEGORIES = ["IC", "ICE", "IR", "EC", "TGV", "RE", "RJX"]
 
 # ===== GA CONFIGURATION =====
 GA_CONFIG = {
@@ -75,7 +79,7 @@ def fetch_train_station_by_name(station_name):
     """Fetch train station info by name from the API."""
 
     def _fetch():
-        query = f"http://transport.opendata.ch/v1/locations?query={station_name}"
+        query = f"https://transport.opendata.ch/v1/locations?query={station_name}"
         response = requests.get(query)
         time.sleep(0.1)  # Add delay to avoid rate limiting
         return response.json().get("stations", [])
@@ -189,6 +193,21 @@ def compute_weight(candidate, state, current_time, hyperparams):
     extra_stops = stop_index - p["minJourneyLegDistance"]
     weight *= 1 + extra_stops * p["journeyLegDistanceFactor"]
 
+    # --- Penalize very short journey legs (1-2 stops), moderated by distance ---
+    if stop_index <= 2:
+        departure_coord = train.get("passList", [{}])[0].get("station", {}).get("coordinate", {})
+        arrival_coord = stop.get("station", {}).get("coordinate", {})
+        leg_distance_km = 0
+        if departure_coord and arrival_coord:
+            leg_distance_km = haversine_km(
+                departure_coord.get("x", 0),
+                departure_coord.get("y", 0),
+                arrival_coord.get("x", 0),
+                arrival_coord.get("y", 0),
+            )
+        distance_factor = max(0, 1 - leg_distance_km / 100)
+        weight *= max(0.1, 1 - p["shortJourneyLegPenalty"] * distance_factor)
+
     if wait_time_minutes is not None and p["idleDurationFactor"] > 0:
         mid = (p["minIdleDuration"] + p["maxIdleDuration"]) / 2
         range_val = (p["maxIdleDuration"] - p["minIdleDuration"]) / 2
@@ -199,6 +218,9 @@ def compute_weight(candidate, state, current_time, hyperparams):
         weight *= 1 + p["uniqueTrainFactor"]
     if train["category"] not in state["used_transport_categories"]:
         weight *= 1 + p["uniqueMeanOfTransportFactor"]
+
+    if train["category"] in PREFERRED_CATEGORIES:
+        weight *= 1 + p["preferredCategoryFactor"]
 
     from_id = (
         train.get("passList", [{}])[0].get("station", {}).get("id")

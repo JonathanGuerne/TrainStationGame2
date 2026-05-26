@@ -522,6 +522,68 @@
                   <small>Current value: <output id="settings-alreadySteppedInFactor-current" for="settings-alreadySteppedInFactor-range settings-alreadySteppedInFactor-input">0.2</output></small>
                 </div>
               </div>
+
+              <div>
+                <label for="settings-preferredCategoryFactor-range">
+                  <strong>preferredCategoryFactor</strong>
+                  <small id="settings-preferredCategoryFactor-help">Reward larger train lines (IC, ICE, IR, EC, TGV, RE, RJX) to make journeys more interesting.</small>
+                </label>
+                <div class="grid">
+                  <input
+                    type="range"
+                    id="settings-preferredCategoryFactor-range"
+                    name="preferredCategoryFactor"
+                    min="0"
+                    max="3"
+                    step="0.05"
+                    value="0.4"
+                    data-default-value="0.4"
+                    aria-describedby="settings-preferredCategoryFactor-help settings-preferredCategoryFactor-current"
+                  />
+                  <input
+                    type="number"
+                    id="settings-preferredCategoryFactor-input"
+                    min="0"
+                    max="3"
+                    step="0.05"
+                    value="0.4"
+                    data-default-value="0.4"
+                    aria-label="preferredCategoryFactor precise value"
+                  />
+                  <small>Current value: <output id="settings-preferredCategoryFactor-current" for="settings-preferredCategoryFactor-range settings-preferredCategoryFactor-input">0.4</output></small>
+                </div>
+              </div>
+
+              <div>
+                <label for="settings-shortJourneyLegPenalty-range">
+                  <strong>shortJourneyLegPenalty</strong>
+                  <small id="settings-shortJourneyLegPenalty-help">Penalize very short journey legs (1-2 stops). Penalty is moderated by distance traveled.</small>
+                </label>
+                <div class="grid">
+                  <input
+                    type="range"
+                    id="settings-shortJourneyLegPenalty-range"
+                    name="shortJourneyLegPenalty"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value="0.7"
+                    data-default-value="0.7"
+                    aria-describedby="settings-shortJourneyLegPenalty-help settings-shortJourneyLegPenalty-current"
+                  />
+                  <input
+                    type="number"
+                    id="settings-shortJourneyLegPenalty-input"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value="0.7"
+                    data-default-value="0.7"
+                    aria-label="shortJourneyLegPenalty precise value"
+                  />
+                  <small>Current value: <output id="settings-shortJourneyLegPenalty-current" for="settings-shortJourneyLegPenalty-range settings-shortJourneyLegPenalty-input">0.7</output></small>
+                </div>
+              </div>
             </div>
           </fieldset>
 

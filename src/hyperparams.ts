@@ -8,6 +8,8 @@ export interface HyperparamsData {
   uniqueMeanOfTransportFactor: number;
   alreadyVisitedLegFactor: number;
   alreadySteppedInFactor: number;
+  preferredCategoryFactor: number;
+  shortJourneyLegPenalty: number;
 }
 
 export const DEFAULT_HYPERPARAMS: HyperparamsData = {
@@ -20,6 +22,8 @@ export const DEFAULT_HYPERPARAMS: HyperparamsData = {
   uniqueMeanOfTransportFactor: 0.4,
   alreadyVisitedLegFactor: 0.05,
   alreadySteppedInFactor: 0.2,
+  preferredCategoryFactor: 0.4,
+  shortJourneyLegPenalty: 0.7,
 };
 
 const HYPERPARAMS_STORAGE_KEY = "trainGameHyperparams";
@@ -33,6 +37,8 @@ const HYPERPARAM_KEYS: (keyof HyperparamsData)[] = [
   "uniqueMeanOfTransportFactor",
   "alreadyVisitedLegFactor",
   "alreadySteppedInFactor",
+  "preferredCategoryFactor",
+  "shortJourneyLegPenalty",
 ];
 
 function isHyperparamsData(value: unknown): value is HyperparamsData {

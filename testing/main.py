@@ -68,16 +68,22 @@ HYPERPARAMS = {
     # --- Novelty bonuses (multiplicative, applied as 1 + factor) ---
     "uniqueTrainFactor": 0.5,
     "uniqueMeanOfTransportFactor": 0.4,
+    # --- Preferred category bonus (multiplicative, applied as 1 + factor) ---
+    "preferredCategoryFactor": 0.4,
+    # --- Short journey leg penalty (moderated by distance) ---
+    "shortJourneyLegPenalty": 0.7,
     # --- Penalty multipliers (should be in (0, 1]) ---
     "alreadyVisitedLegFactor": 0.05,
     "alreadySteppedInFactor": 0.2,
 }
 
+PREFERRED_CATEGORIES = ["IC", "ICE", "IR", "EC", "TGV", "RE", "RJX"]
+
 GENERATION = "v4_multi_factor_weights"
 
 
 def fetch_train_station_by_name(station_name):
-    query = f"http://transport.opendata.ch/v1/locations?query={station_name}"
+    query = f"https://transport.opendata.ch/v1/locations?query={station_name}"
     response = requests.get(query)
     data = response.json().get("stations", [])
     return [d for d in data if d["icon"] == "train"]
@@ -231,6 +237,21 @@ def compute_weight(candidate, state, current_time):
     extra_stops = stop_index - p["minJourneyLegDistance"]
     weight *= 1 + extra_stops * p["journeyLegDistanceFactor"]
     
+    # --- Penalize very short journey legs (1-2 stops), moderated by distance ---
+    if stop_index <= 2:
+        departure_coord = train.get("passList", [{}])[0].get("station", {}).get("coordinate", {})
+        arrival_coord = stop.get("station", {}).get("coordinate", {})
+        leg_distance_km = 0
+        if departure_coord and arrival_coord:
+            leg_distance_km = haversine_km(
+                departure_coord.get("x", 0),
+                departure_coord.get("y", 0),
+                arrival_coord.get("x", 0),
+                arrival_coord.get("y", 0),
+            )
+        distance_factor = max(0, 1 - leg_distance_km / 100)
+        weight *= max(0.1, 1 - p["shortJourneyLegPenalty"] * distance_factor)
+    
     # --- Idle duration reward (Gaussian-like at midpoint of window) ---
     if wait_time_minutes is not None and p["idleDurationFactor"] > 0:
         mid = (p["minIdleDuration"] + p["maxIdleDuration"]) / 2
@@ -244,6 +265,10 @@ def compute_weight(candidate, state, current_time):
         weight *= 1 + p["uniqueTrainFactor"]
     if train["category"] not in state["used_transport_categories"]:
         weight *= 1 + p["uniqueMeanOfTransportFactor"]
+    
+    # --- Preferred category bonus ---
+    if train["category"] in PREFERRED_CATEGORIES:
+        weight *= 1 + p["preferredCategoryFactor"]
     
     # --- Penalty: already took this exact leg ---
     from_id = train.get("passList", [{}])[0].get("station", {}).get("id") if train.get("passList") else ""

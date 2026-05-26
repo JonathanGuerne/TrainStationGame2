@@ -15,6 +15,8 @@ export type HyperparamsData = {
   uniqueMeanOfTransportFactor: number;
   alreadyVisitedLegFactor: number;
   alreadySteppedInFactor: number;
+  preferredCategoryFactor: number;
+  shortJourneyLegPenalty: number;
 };
 
 export type SimulationConfig = {
@@ -70,6 +72,7 @@ type SimulationState = {
 
 const API_DELAY_MS = 500;
 const MAX_SELECTION_ATTEMPTS = 5;
+const PREFERRED_CATEGORIES = ["IC", "ICE", "IR", "EC", "TGV", "RE", "RJX"];
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
@@ -180,7 +183,7 @@ function findMatchingStation(stations: TrainStation[], stationId: string, statio
 
 export async function fetchTrainStationByName(stationName: string): Promise<TrainStation[]> {
   const params = new URLSearchParams({ query: stationName });
-  const response = await fetch(`http://transport.opendata.ch/v1/locations?${params.toString()}`);
+  const response = await fetch(`https://transport.opendata.ch/v1/locations?${params.toString()}`);
   if (!response.ok) {
     throw new Error(`Failed to fetch train stations for ${stationName}.`);
   }
@@ -278,6 +281,23 @@ export function computeWeight(
   const extraStops = stopIndex - hyperparams.minJourneyLegDistance;
   weight *= 1 + extraStops * hyperparams.journeyLegDistanceFactor;
 
+  // Penalize very short journey legs (1-2 stops) more heavily, moderated by distance
+  if (stopIndex <= 2) {
+    const departureCoord = train.passList[0]?.station?.coordinate;
+    const arrivalCoord = stop.station?.coordinate;
+    const legDistanceKm = (departureCoord && arrivalCoord)
+      ? haversineKm(
+          departureCoord.x,
+          departureCoord.y,
+          arrivalCoord.x,
+          arrivalCoord.y,
+        )
+      : 0;
+
+    const distanceFactor = Math.max(0, 1 - legDistanceKm / 100);
+    weight *= Math.max(0.1, 1 - hyperparams.shortJourneyLegPenalty * distanceFactor);
+  }
+
   if (waitTimeMinutes !== null && hyperparams.idleDurationFactor > 0) {
     const midpoint = (hyperparams.minIdleDuration + hyperparams.maxIdleDuration) / 2;
     const range = (hyperparams.maxIdleDuration - hyperparams.minIdleDuration) / 2;
@@ -293,6 +313,10 @@ export function computeWeight(
 
   if (!state.used_transport_categories.has(train.category)) {
     weight *= 1 + hyperparams.uniqueMeanOfTransportFactor;
+  }
+
+  if (PREFERRED_CATEGORIES.includes(train.category)) {
+    weight *= 1 + hyperparams.preferredCategoryFactor;
   }
 
   const fromId = train.passList[0]?.station?.id ?? "";
