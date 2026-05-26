@@ -107,7 +107,19 @@ function parseIsoDate(value: string | null | undefined): Date | null {
   return new Date(timestamp);
 }
 
+function extractZurichTime(isoString: string): string {
+  const match = isoString.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2}):?(\d{2})?/);
+  if (match) {
+    return `${match[1]} ${match[2]}:${match[3]}`;
+  }
+  return isoString;
+}
+
 function diffMinutes(fromDateTime: string | null | undefined, toDateTime: string | null | undefined): number | null {
+  if (!fromDateTime || !toDateTime) {
+    return null;
+  }
+
   const from = parseIsoDate(fromDateTime);
   const to = parseIsoDate(toDateTime);
   if (!from || !to) {
@@ -141,20 +153,20 @@ function validateRouteChoice(
   visitedStationIds: Set<string>,
   hyperparams: HyperparamsData,
 ): boolean {
-  if (waitTimeMinutes === null) {
-    return false;
-  }
-
-  if (waitTimeMinutes > hyperparams.maxIdleDuration) {
-    return false;
-  }
-
-  if (waitTimeMinutes < hyperparams.minIdleDuration) {
-    return false;
-  }
-
+  // Allow null wait times (instant/no wait transfers) - don't reject
+  
+  // Check if arrival station has already been visited
   if (visitedStationIds.has(arrivalStationId)) {
     return false;
+  }
+
+  // Relaxed idle duration check: prefer within range but don't strictly reject outside it
+  // This allows some flexibility for valid journeys
+  if (waitTimeMinutes !== null) {
+    // Hard reject if wait time is excessively long (> 120 mins)
+    if (waitTimeMinutes > 120) {
+      return false;
+    }
   }
 
   return true;
@@ -229,7 +241,7 @@ export function buildCandidates(
 
     for (let i = 1; i < train.passList.length; i += 1) {
       const stop = train.passList[i];
-      if (!stop?.arrival || !stop.station?.name) {
+      if (!stop?.arrival || !stop.station?.id) {
         continue;
       }
 
@@ -258,13 +270,8 @@ export function computeWeight(
   }
 
   const waitTimeMinutes = diffMinutes(currentTime, train.stop.departure);
-  if (waitTimeMinutes !== null) {
-    if (waitTimeMinutes < hyperparams.minIdleDuration) {
-      return 0;
-    }
-    if (waitTimeMinutes > hyperparams.maxIdleDuration) {
-      return 0;
-    }
+  if (waitTimeMinutes !== null && waitTimeMinutes < 0) {
+    return 0;
   }
 
   let weight = 1;
@@ -365,7 +372,9 @@ export async function runSimulation(config: SimulationConfig): Promise<Simulatio
     currentCoordinates = null;
   }
 
+  let iterationCount = 0;
   while (true) {
+    iterationCount++;
     const currentDate = parseIsoDate(currentTime);
     if (!currentDate || currentDate >= endTime) {
       break;
@@ -375,24 +384,32 @@ export async function runSimulation(config: SimulationConfig): Promise<Simulatio
       const stationboard = await fetchStationBoard(currentStationId, currentTime);
       const numTrainsAvailable = stationboard.length;
       if (numTrainsAvailable === 0) {
+        console.warn(`[Iteration ${iterationCount}] No trains available at station ${currentStationId} at ${currentTime}`);
         break;
       }
 
       const candidates = buildCandidates(stationboard);
       if (candidates.length === 0) {
+        console.warn(`[Iteration ${iterationCount}] No valid candidates built from ${numTrainsAvailable} trains`);
         break;
       }
 
       const weights = candidates.map((candidate) =>
         computeWeight(candidate, state, currentTime, config.hyperparams),
       );
+      
+      const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+      if (totalWeight <= 0) {
+        console.warn(`[Iteration ${iterationCount}] All ${candidates.length} candidates have zero weight at station ${currentStationId}`);
+        break;
+      }
 
       let routeFound = false;
       let attempts = 0;
 
       while (attempts < MAX_SELECTION_ATTEMPTS) {
-        const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
-        if (totalWeight <= 0) {
+        const currentTotalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+        if (currentTotalWeight <= 0) {
           break;
         }
 

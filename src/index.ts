@@ -13,6 +13,88 @@ import {
 } from "./simulation";
 
 // ============================================================
+// TOAST NOTIFICATIONS
+// ============================================================
+
+function showToast(message: string, duration = 3000): void {
+  const container = document.getElementById("toast-container");
+  if (!container) return;
+
+  const toast = document.createElement("div");
+  toast.style.cssText = `
+    position: fixed;
+    top: 2rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10000;
+    background-color: white;
+    border: 2px solid var(--form-element-valid-border-color);
+    border-radius: 0.5rem;
+    padding: 1rem 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    animation: slideInDown 0.3s ease-out;
+    max-width: 90vw;
+  `;
+
+  const checkmark = document.createElement("span");
+  checkmark.textContent = "✓";
+  checkmark.style.cssText = `
+    color: var(--form-element-valid-border-color);
+    font-size: 1.5rem;
+    font-weight: bold;
+    flex-shrink: 0;
+  `;
+
+  const text = document.createElement("span");
+  text.textContent = message;
+  text.style.cssText = `
+    color: var(--muted-color);
+    font-size: 1rem;
+  `;
+
+  toast.appendChild(checkmark);
+  toast.appendChild(text);
+  container.appendChild(toast);
+
+  setTimeout(() => {
+    toast.style.animation = "slideOutUp 0.3s ease-out";
+    setTimeout(() => toast.remove(), 300);
+  }, duration);
+}
+
+// Add animation keyframes to document
+if (!document.querySelector("style[data-toast-animations]")) {
+  const style = document.createElement("style");
+  style.setAttribute("data-toast-animations", "true");
+  style.textContent = `
+    @keyframes slideInDown {
+      from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(-20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+      }
+    }
+    @keyframes slideOutUp {
+      from {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+      }
+      to {
+        opacity: 0;
+        transform: translateX(-50%) translateY(-20px);
+      }
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+// ============================================================
 // SELECTION HYPERPARAMETERS
 // These are the knobs the GA will optimise. Adjust manually
 // for testing, or let the Python GA sweep them.
@@ -21,9 +103,12 @@ let HYPERPARAMS: HyperparamsData = loadHyperparameters();
 // ============================================================
 
 const btnIntro = document.getElementById("btn-intro");
-const btnBackIntro = document.getElementById("btn-back-intro");
 const gameArticle = document.getElementById("game-article");
 const introArticle = document.getElementById("intro-article");
+const navIntro = document.getElementById("nav-intro") as HTMLAnchorElement | null;
+const navGame = document.getElementById("nav-game") as HTMLAnchorElement | null;
+const navSimulation = document.getElementById("nav-simulation") as HTMLAnchorElement | null;
+const navSettings = document.getElementById("nav-settings") as HTMLAnchorElement | null;
 const departureStationDiv = document.getElementById(
   "departure-station",
 ) as HTMLElement | null;
@@ -32,6 +117,9 @@ const departureTimeDiv = document.getElementById(
 ) as HTMLElement | null;
 const departurePlatformDiv = document.getElementById(
   "departure-platform",
+) as HTMLElement | null;
+const departurePlatformLine = document.getElementById(
+  "departure-platform-line",
 ) as HTMLElement | null;
 const arrivalStationDiv = document.getElementById(
   "arrival-station",
@@ -42,6 +130,9 @@ const arrivalTimeDiv = document.getElementById(
 const arrivalPlatformDiv = document.getElementById(
   "arrival-platform",
 ) as HTMLElement | null;
+const arrivalPlatformLine = document.getElementById(
+  "arrival-platform-line",
+) as HTMLElement | null;
 const btnReloadTrain = document.getElementById("btn-reload-train");
 const sectionError = document.getElementById("error-section");
 const sectionTrainDetails = document.getElementById("train-details-section");
@@ -49,9 +140,6 @@ const sectionLoading = document.getElementById("loading-section");
 const btnValidateTrain = document.getElementById("btn-validate-train");
 const btnClearJourney = document.getElementById("btn-clear-journey");
 const ulJourneyList = document.getElementById("journey-info-list");
-const btnOpenSettings = document.getElementById(
-  "btn-open-settings",
-) as HTMLButtonElement | null;
 const settingsModalArticle = document.getElementById(
   "settings-modal-article",
 ) as HTMLElement | null;
@@ -64,21 +152,9 @@ const btnSettingsReset = document.getElementById(
 const btnSettingsSaveClose = document.getElementById(
   "btn-settings-save-close",
 ) as HTMLButtonElement | null;
-const btnSettingsCancel = document.getElementById(
-  "btn-settings-cancel",
-) as HTMLButtonElement | null;
-const btnOpenSimulation = document.getElementById(
-  "btn-open-simulation",
-) as HTMLButtonElement | null;
 const simulationArticle = document.getElementById(
   "simulation-article",
 ) as HTMLElement | null;
-const btnSimulationBackGame = document.getElementById(
-  "btn-simulation-back-game",
-) as HTMLButtonElement | null;
-const btnSimulationBackIntro = document.getElementById(
-  "btn-simulation-back-intro",
-) as HTMLButtonElement | null;
 const simulationConfigSection = document.getElementById(
   "simulation-config-section",
 ) as HTMLElement | null;
@@ -94,12 +170,9 @@ const simStartDateTimeInput = document.getElementById(
 const simEndTimeInput = document.getElementById(
   "sim-end-time",
 ) as HTMLInputElement | null;
-const simHyperparamsDefaultsRadio = document.getElementById(
-  "sim-hyperparams-defaults",
-) as HTMLInputElement | null;
-const simHyperparamsCustomGameRadio = document.getElementById(
-  "sim-hyperparams-custom-game",
-) as HTMLInputElement | null;
+const btnUseCurrentLocation = document.getElementById(
+  "btn-use-current-location",
+) as HTMLButtonElement | null;
 const btnRunSimulation = document.getElementById(
   "btn-run-simulation",
 ) as HTMLButtonElement | null;
@@ -422,14 +495,6 @@ function readSettingsFromUI(): HyperparamsData {
   return params;
 }
 
-function openSettingsModal(): void {
-  loadSettingsIntoUI();
-  hasUnsavedSettingsReset = false;
-  if (settingsModalArticle) {
-    settingsModalArticle.hidden = false;
-  }
-}
-
 function closeSettingsModal(discardChanges = false): void {
   if (discardChanges) {
     if (hasUnsavedSettingsReset) {
@@ -438,10 +503,6 @@ function closeSettingsModal(discardChanges = false): void {
     }
     loadSettingsIntoUI();
   }
-
-  if (settingsModalArticle) {
-    settingsModalArticle.hidden = true;
-  }
 }
 
 function saveSettingsFromUI(): void {
@@ -449,8 +510,7 @@ function saveSettingsFromUI(): void {
   saveHyperparameters(params);
   HYPERPARAMS = params;
   hasUnsavedSettingsReset = false;
-  closeSettingsModal();
-  console.info("Settings saved");
+  showToast("Settings saved successfully!");
 }
 
 for (const control of HYPERPARAM_CONTROL_CONFIG) {
@@ -533,6 +593,25 @@ function parseDateInput(value: string): Date | null {
   return parsedDate;
 }
 
+function toZurichIsoString(date: Date): string {
+  const year = String(date.getFullYear()).padStart(4, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const seconds = String(date.getSeconds()).padStart(2, "0");
+  
+  // Calculate Zurich timezone offset for this date
+  // Zurich is UTC+1 (winter) or UTC+2 (summer)
+  const zurichDate = new Date(date.toLocaleString("en-US", { timeZone: "Europe/Zurich" }));
+  const utcDate = new Date(date.toLocaleString("en-US", { timeZone: "UTC" }));
+  const offsetHours = (zurichDate.getHours() - utcDate.getHours()) % 24;
+  const offsetSign = offsetHours >= 0 ? "+" : "-";
+  const offsetStr = `${offsetSign}${String(Math.abs(offsetHours)).padStart(2, "0")}:00`;
+  
+  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${offsetStr}`;
+}
+
 function combineDateAndTime(startDate: Date, endTimeValue: string): Date | null {
   const timeMatch = endTimeValue.match(/^(\d{2}):(\d{2})$/);
   if (!timeMatch) {
@@ -544,16 +623,22 @@ function combineDateAndTime(startDate: Date, endTimeValue: string): Date | null 
   return endDate;
 }
 
+function setDefaultSimulationTimes(): void {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
+  
+  if (simStartDateTimeInput) {
+    simStartDateTimeInput.value = `${year}-${month}-${day}T08:00`;
+  }
+  if (simEndTimeInput) {
+    simEndTimeInput.value = "16:00";
+  }
+}
+
 function getSelectedSimulationHyperparams(): HyperparamsData {
-  if (simHyperparamsCustomGameRadio?.checked) {
-    return { ...HYPERPARAMS };
-  }
-
-  if (simHyperparamsDefaultsRadio?.checked) {
-    return { ...DEFAULT_HYPERPARAMS };
-  }
-
-  return { ...DEFAULT_HYPERPARAMS };
+  return { ...HYPERPARAMS };
 }
 
 function prepareSimulationInput(): PreparedSimulationInput {
@@ -616,8 +701,11 @@ async function resolveSimulationStartStation(
 }
 
 function formatSimulationDateTime(value: string): string {
-  const parsedDate = parseDateInput(value);
-  return parsedDate ? parsedDate.toLocaleString() : value;
+  const match = value.match(/(\d{2}):(\d{2})/);
+  if (match) {
+    return `${match[1]}:${match[2]}`;
+  }
+  return value;
 }
 
 function formatSimulationNumber(
@@ -648,7 +736,7 @@ function formatSimulationElapsed(elapsedMs: number): string {
 }
 
 function formatSimulationTrain(leg: SimulationLeg): string {
-  return [leg.train_category, leg.train_number].filter(Boolean).join(" ");
+  return [leg.train_category, leg.train_number].filter(Boolean).join("");
 }
 
 function getSimulationTotalDistance(legs: SimulationLeg[]): number {
@@ -698,9 +786,8 @@ function renderSimulationResults(
         formatSimulationDateTime(leg.departure_time),
         formatSimulationDateTime(leg.arrival_time),
         formatSimulationNumber(leg.wait_time_minutes, 1),
-        formatSimulationNumber(leg.duration_minutes, 1),
-        formatSimulationNumber(leg.leg_distance_km, 3),
-        formatSimulationWeight(leg.selection_weight),
+        formatSimulationNumber(leg.duration_minutes, 0),
+        formatSimulationNumber(leg.leg_distance_km, 0),
       ];
 
       values.forEach((value) => {
@@ -777,6 +864,7 @@ function exportSimulationResultsAsCsv(): void {
 function resetSimulationForm(): void {
   activeSimulationRequestId += 1;
   simulationForm?.reset();
+  setDefaultSimulationTimes();
   latestSimulationResults = [];
   clearSimulationResultsTable();
   if (simulationSummaryText) {
@@ -796,6 +884,7 @@ function resetSimulationForm(): void {
 function openSimulationArticle(): void {
   introArticle?.setAttribute("hidden", "true");
   gameArticle?.setAttribute("hidden", "true");
+  settingsModalArticle?.setAttribute("hidden", "true");
   simulationArticle?.removeAttribute("hidden");
   hideSimulationFeedbackSections();
   setElementHidden(simulationConfigSection, false);
@@ -842,8 +931,8 @@ async function handleSimulationFormSubmit(event: SubmitEvent): Promise<void> {
     const config: SimulationConfig = {
       startStationName: startStation.name,
       startStationId: startStation.id,
-      startTime: preparedInput.startDate.toISOString(),
-      endTime: preparedInput.endDate.toISOString(),
+      startTime: toZurichIsoString(preparedInput.startDate),
+      endTime: toZurichIsoString(preparedInput.endDate),
       hyperparams: preparedInput.hyperparams,
     };
 
@@ -880,29 +969,65 @@ setButtonDisabled(btnExportCsv, true);
 btnIntro?.addEventListener("click", () => {
   introArticle?.setAttribute("hidden", "true");
   gameArticle?.removeAttribute("hidden");
+  settingsModalArticle?.setAttribute("hidden", "true");
+  simulationArticle?.setAttribute("hidden", "true");
   updateUITrain();
+});
+
+navIntro?.addEventListener("click", (e) => {
+  e.preventDefault();
+  introArticle?.removeAttribute("hidden");
+  gameArticle?.setAttribute("hidden", "true");
+  settingsModalArticle?.setAttribute("hidden", "true");
+  simulationArticle?.setAttribute("hidden", "true");
+});
+
+navGame?.addEventListener("click", (e) => {
+  e.preventDefault();
+  introArticle?.setAttribute("hidden", "true");
+  gameArticle?.removeAttribute("hidden");
+  settingsModalArticle?.setAttribute("hidden", "true");
+  simulationArticle?.setAttribute("hidden", "true");
+  updateUITrain();
+});
+
+navSimulation?.addEventListener("click", (e) => {
+  e.preventDefault();
+  openSimulationArticle();
+});
+
+navSettings?.addEventListener("click", (e) => {
+  e.preventDefault();
+  introArticle?.setAttribute("hidden", "true");
+  gameArticle?.setAttribute("hidden", "true");
+  settingsModalArticle?.removeAttribute("hidden");
+  simulationArticle?.setAttribute("hidden", "true");
 });
 
 btnReloadTrain?.addEventListener("click", () => {
   updateUITrain();
 });
 
-btnOpenSimulation?.addEventListener("click", () => {
-  openSimulationArticle();
-});
-
-btnSimulationBackGame?.addEventListener("click", () => {
-  activeSimulationRequestId += 1;
-  simulationArticle?.setAttribute("hidden", "true");
-  introArticle?.setAttribute("hidden", "true");
-  gameArticle?.removeAttribute("hidden");
-});
-
-btnSimulationBackIntro?.addEventListener("click", () => {
-  activeSimulationRequestId += 1;
-  simulationArticle?.setAttribute("hidden", "true");
-  gameArticle?.setAttribute("hidden", "true");
-  introArticle?.removeAttribute("hidden");
+btnUseCurrentLocation?.addEventListener("click", async (e) => {
+  e.preventDefault();
+  btnUseCurrentLocation.disabled = true;
+  btnUseCurrentLocation.textContent = "📍 Finding...";
+  try {
+    const [lat, lon] = await getCurrentPlayerGPSLocation();
+    const station = await fetchTrainStationData(lat, lon);
+    if (station) {
+      if (simStartStationInput) simStartStationInput.value = station.name;
+      setDefaultSimulationTimes();
+    } else {
+      alert("No train station found nearby.");
+    }
+  } catch (error) {
+    console.error("Failed to get current location:", error);
+    alert("Could not get your location. Please enable location access.");
+  } finally {
+    btnUseCurrentLocation.disabled = false;
+    btnUseCurrentLocation.textContent = "📍 Use Current";
+  }
 });
 
 simulationForm?.addEventListener("submit", (event) => {
@@ -954,19 +1079,13 @@ btnClearJourney?.addEventListener("click", () => {
   updateUIJourneyListInfo();
 });
 
-btnBackIntro?.addEventListener("click", () => {
-  gameArticle?.setAttribute("hidden", "true");
-  introArticle?.removeAttribute("hidden");
-});
-
-btnOpenSettings?.addEventListener("click", () => {
-  openSettingsModal();
-});
-
 btnSettingsReset?.addEventListener("click", () => {
   const defaultHyperparams = resetHyperparametersToDefaults();
-  hasUnsavedSettingsReset = true;
+  saveHyperparameters(defaultHyperparams);
+  HYPERPARAMS = defaultHyperparams;
+  hasUnsavedSettingsReset = false;
   applySettingsToUI(defaultHyperparams);
+  showToast("Settings reset to defaults!");
 });
 
 settingsForm?.addEventListener("submit", (event) => {
@@ -974,15 +1093,14 @@ settingsForm?.addEventListener("submit", (event) => {
   saveSettingsFromUI();
 });
 
-btnSettingsCancel?.addEventListener("click", () => {
-  closeSettingsModal(true);
-});
-
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && !settingsModalArticle?.hidden) {
-    closeSettingsModal(true);
+    navGame?.click();
   }
 });
+
+// Initialize default simulation times on page load
+setDefaultSimulationTimes();
 
 // ============================================================
 // UI RENDERING
@@ -990,6 +1108,12 @@ document.addEventListener("keydown", (event) => {
 
 function formatDurationMs(startTime: number): string {
   return `${(performance.now() - startTime).toFixed(1)}ms`;
+}
+
+function formatTimeOnly(isoDateTimeString: string): string {
+  const match = isoDateTimeString.match(/(\d{2}):(\d{2})(?::\d{2})?/);
+  if (match) return `${match[1]}:${match[2]}`;
+  return isoDateTimeString;
 }
 
 function debugLog(message: string, details?: unknown): void {
@@ -1033,7 +1157,7 @@ function updateUIJourneyListInfo() {
   const fragment = document.createDocumentFragment();
   journeyInfo.forEach((info) => {
     const li = document.createElement("li");
-    li.innerText = `From ${info.departureStation} at ${info.departureTime} on platform ${info.departurePlatform} to ${info.arrivalStation} at ${info.arrivalTime} on platform ${info.arrivalPlatform}`;
+    li.innerText = `${info.departureStation} ${formatTimeOnly(info.departureTime)} → ${info.arrivalStation} ${formatTimeOnly(info.arrivalTime)}`;
     fragment.appendChild(li);
   });
   ulJourneyList.appendChild(fragment);
@@ -1396,18 +1520,28 @@ async function updateTrainInfo(): Promise<void> {
     departureStationDiv.dataset.trainNumber = journeyInfo.trainNumber;
     departureStationDiv.dataset.trainCategory = journeyInfo.trainCategory;
   }
-  if (departureTimeDiv) departureTimeDiv.innerText = journeyInfo.departureTime;
-  if (departurePlatformDiv)
-    departurePlatformDiv.innerText =
-      journeyInfo.departurePlatform?.toString() || "N/A";
+  if (departureTimeDiv) departureTimeDiv.innerText = formatTimeOnly(journeyInfo.departureTime);
+  if (departurePlatformDiv && departurePlatformLine) {
+    if (journeyInfo.departurePlatform) {
+      departurePlatformDiv.innerText = journeyInfo.departurePlatform.toString();
+      departurePlatformLine.hidden = false;
+    } else {
+      departurePlatformLine.hidden = true;
+    }
+  }
   if (arrivalStationDiv) {
     arrivalStationDiv.innerText = journeyInfo.arrivalStation;
     arrivalStationDiv.dataset.stationId = journeyInfo.arrivalStationId;
   }
-  if (arrivalTimeDiv) arrivalTimeDiv.innerText = journeyInfo.arrivalTime;
-  if (arrivalPlatformDiv)
-    arrivalPlatformDiv.innerText =
-      journeyInfo.arrivalPlatform?.toString() || "N/A";
+  if (arrivalTimeDiv) arrivalTimeDiv.innerText = formatTimeOnly(journeyInfo.arrivalTime);
+  if (arrivalPlatformDiv && arrivalPlatformLine) {
+    if (journeyInfo.arrivalPlatform) {
+      arrivalPlatformDiv.innerText = journeyInfo.arrivalPlatform.toString();
+      arrivalPlatformLine.hidden = false;
+    } else {
+      arrivalPlatformLine.hidden = true;
+    }
+  }
   debugLog(
     `Updated train details UI in ${formatDurationMs(domUpdateStartedAt)}`,
   );
