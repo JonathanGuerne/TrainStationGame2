@@ -72,8 +72,12 @@ HYPERPARAMS = {
     "preferredCategoryFactor": 0.4,
     # --- Short journey leg penalty (moderated by distance) ---
     "shortJourneyLegPenalty": 0.7,
-    # --- Minimum leg duration penalty (for legs < 10 minutes) ---
+    # --- Minimum leg duration penalty (for legs < minimumLegDuration minutes) ---
     "minimumLegDurationPenalty": 0.8,
+    # --- Stationboard limit: number of trains to fetch per API call ---
+    "stationboardLimit": 10,
+    # --- Minimum train ride duration (minutes) to avoid penalties ---
+    "minimumLegDuration": 10,
     # --- Penalty multipliers (should be in (0, 1]) ---
     "alreadyVisitedLegFactor": 0.05,
     "alreadySteppedInFactor": 0.2,
@@ -91,12 +95,12 @@ def fetch_train_station_by_name(station_name):
     return [d for d in data if d["icon"] == "train"]
 
 
-def fetch_train_station_data(station_id, datetime_for_departure):
+def fetch_train_station_data(station_id, datetime_for_departure, limit=10):
     # convert datetime to YYYY-MM-DD hh:mm format
     if isinstance(datetime_for_departure, str):
         datetime_for_departure = datetime.datetime.fromisoformat(datetime_for_departure)
         datetime_for_departure = datetime_for_departure.strftime("%Y-%m-%d %H:%M")
-    info = f"https://transport.opendata.ch/v1/stationboard?id={station_id}&limit=10&datetime={datetime_for_departure}"
+    info = f"https://transport.opendata.ch/v1/stationboard?id={station_id}&limit={limit}&datetime={datetime_for_departure}"
     response = requests.get(info)
     data = response.json().get("stationboard", [])
     return data
@@ -308,7 +312,7 @@ def compute_weight(candidate, state, current_time):
         distance_factor = max(0, 1 - leg_distance_km / 100)
         weight *= max(0.1, 1 - p["shortJourneyLegPenalty"] * distance_factor)
     
-    # --- Penalize very short duration legs (< 10 minutes) ---
+    # --- Penalize very short duration legs (< minimumLegDuration) ---
     train_dep_str = (train.get("stop") or {}).get("departure")
     leg_arrival_str = stop.get("arrival")
     if train_dep_str and leg_arrival_str:
@@ -316,7 +320,7 @@ def compute_weight(candidate, state, current_time):
             train_dep_dt = datetime.datetime.fromisoformat(train_dep_str)
             leg_arrival_dt = datetime.datetime.fromisoformat(leg_arrival_str)
             duration_minutes = (leg_arrival_dt - train_dep_dt).total_seconds() / 60
-            if duration_minutes < 10:
+            if duration_minutes < p["minimumLegDuration"]:
                 weight *= max(0.1, 1 - p["minimumLegDurationPenalty"])
         except Exception:
             pass
@@ -396,7 +400,7 @@ while int(current_time.split("T")[1].split(":")[0]) < int(
 
     print(f"Current station: {current_station_name} at {current_time}")
 
-    data = fetch_train_station_data(current_station_id, current_time)
+    data = fetch_train_station_data(current_station_id, current_time, HYPERPARAMS["stationboardLimit"])
     data = deduplicate_stationboard(data, current_time)
     num_trains_available = len(data)
 

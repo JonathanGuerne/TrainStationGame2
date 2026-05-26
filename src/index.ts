@@ -276,6 +276,36 @@ const HYPERPARAM_CONTROL_CONFIG: HyperparamControlConfig[] = [
     inputId: "settings-alreadySteppedInFactor-input",
     outputId: "settings-alreadySteppedInFactor-current",
   },
+  {
+    key: "preferredCategoryFactor",
+    rangeId: "settings-preferredCategoryFactor-range",
+    inputId: "settings-preferredCategoryFactor-input",
+    outputId: "settings-preferredCategoryFactor-current",
+  },
+  {
+    key: "shortJourneyLegPenalty",
+    rangeId: "settings-shortJourneyLegPenalty-range",
+    inputId: "settings-shortJourneyLegPenalty-input",
+    outputId: "settings-shortJourneyLegPenalty-current",
+  },
+  {
+    key: "minimumLegDurationPenalty",
+    rangeId: "settings-minimumLegDurationPenalty-range",
+    inputId: "settings-minimumLegDurationPenalty-input",
+    outputId: "settings-minimumLegDurationPenalty-current",
+  },
+  {
+    key: "stationboardLimit",
+    rangeId: "settings-stationboardLimit-range",
+    inputId: "settings-stationboardLimit-input",
+    outputId: "settings-stationboardLimit-current",
+  },
+  {
+    key: "minimumLegDuration",
+    rangeId: "settings-minimumLegDuration-range",
+    inputId: "settings-minimumLegDuration-input",
+    outputId: "settings-minimumLegDuration-current",
+  },
 ];
 
 let hasUnsavedSettingsReset = false;

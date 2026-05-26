@@ -304,7 +304,7 @@
               <div>
                 <label for="settings-minIdleDuration-range">
                   <strong>minIdleDuration</strong>
-                  <small id="settings-minIdleDuration-help">Minimum wait time in minutes before a candidate leg is allowed.</small>
+                  <small id="settings-minIdleDuration-help">Hard minimum: candidate legs with wait time below this are rejected.</small>
                 </label>
                 <div class="grid">
                   <input
@@ -314,8 +314,8 @@
                     min="0"
                     max="120"
                     step="1"
-                    value="2"
-                    data-default-value="2"
+                    value="7"
+                    data-default-value="7"
                     aria-describedby="settings-minIdleDuration-help settings-minIdleDuration-current"
                   />
                   <input
@@ -324,18 +324,18 @@
                     min="0"
                     max="120"
                     step="1"
-                    value="2"
-                    data-default-value="2"
+                    value="7"
+                    data-default-value="7"
                     aria-label="minIdleDuration precise value"
                   />
-                  <small>Current value: <output id="settings-minIdleDuration-current" for="settings-minIdleDuration-range settings-minIdleDuration-input">2</output></small>
+                  <small>Current value: <output id="settings-minIdleDuration-current" for="settings-minIdleDuration-range settings-minIdleDuration-input">7</output></small>
                 </div>
               </div>
 
               <div>
                 <label for="settings-maxIdleDuration-range">
                   <strong>maxIdleDuration</strong>
-                  <small id="settings-maxIdleDuration-help">Maximum wait time in minutes before a candidate leg is discarded.</small>
+                  <small id="settings-maxIdleDuration-help">Hard maximum: candidate legs with wait time above this are rejected.</small>
                 </label>
                 <div class="grid">
                   <input
@@ -343,23 +343,23 @@
                     id="settings-maxIdleDuration-range"
                     name="maxIdleDuration"
                     min="0"
-                    max="120"
+                    max="180"
                     step="1"
-                    value="60"
-                    data-default-value="60"
+                    value="90"
+                    data-default-value="90"
                     aria-describedby="settings-maxIdleDuration-help settings-maxIdleDuration-current"
                   />
                   <input
                     type="number"
                     id="settings-maxIdleDuration-input"
                     min="0"
-                    max="120"
+                    max="180"
                     step="1"
-                    value="60"
-                    data-default-value="60"
+                    value="90"
+                    data-default-value="90"
                     aria-label="maxIdleDuration precise value"
                   />
-                  <small>Current value: <output id="settings-maxIdleDuration-current" for="settings-maxIdleDuration-range settings-maxIdleDuration-input">60</output></small>
+                  <small>Current value: <output id="settings-maxIdleDuration-current" for="settings-maxIdleDuration-range settings-maxIdleDuration-input">90</output></small>
                 </div>
               </div>
 
@@ -582,6 +582,104 @@
                     aria-label="shortJourneyLegPenalty precise value"
                   />
                   <small>Current value: <output id="settings-shortJourneyLegPenalty-current" for="settings-shortJourneyLegPenalty-range settings-shortJourneyLegPenalty-input">0.7</output></small>
+                </div>
+              </div>
+
+              <div>
+                <label for="settings-minimumLegDurationPenalty-range">
+                  <strong>minimumLegDurationPenalty</strong>
+                  <small id="settings-minimumLegDurationPenalty-help">Penalize train rides shorter than minimumLegDuration minutes.</small>
+                </label>
+                <div class="grid">
+                  <input
+                    type="range"
+                    id="settings-minimumLegDurationPenalty-range"
+                    name="minimumLegDurationPenalty"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value="0.8"
+                    data-default-value="0.8"
+                    aria-describedby="settings-minimumLegDurationPenalty-help settings-minimumLegDurationPenalty-current"
+                  />
+                  <input
+                    type="number"
+                    id="settings-minimumLegDurationPenalty-input"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value="0.8"
+                    data-default-value="0.8"
+                    aria-label="minimumLegDurationPenalty precise value"
+                  />
+                  <small>Current value: <output id="settings-minimumLegDurationPenalty-current" for="settings-minimumLegDurationPenalty-range settings-minimumLegDurationPenalty-input">0.8</output></small>
+                </div>
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>API & Duration Thresholds</legend>
+            <div class="grid">
+              <div>
+                <label for="settings-stationboardLimit-range">
+                  <strong>stationboardLimit</strong>
+                  <small id="settings-stationboardLimit-help">Number of trains to fetch per API call (higher = more options but slower).</small>
+                </label>
+                <div class="grid">
+                  <input
+                    type="range"
+                    id="settings-stationboardLimit-range"
+                    name="stationboardLimit"
+                    min="5"
+                    max="50"
+                    step="1"
+                    value="10"
+                    data-default-value="10"
+                    aria-describedby="settings-stationboardLimit-help settings-stationboardLimit-current"
+                  />
+                  <input
+                    type="number"
+                    id="settings-stationboardLimit-input"
+                    min="5"
+                    max="50"
+                    step="1"
+                    value="10"
+                    data-default-value="10"
+                    aria-label="stationboardLimit precise value"
+                  />
+                  <small>Current value: <output id="settings-stationboardLimit-current" for="settings-stationboardLimit-range settings-stationboardLimit-input">10</output></small>
+                </div>
+              </div>
+
+              <div>
+                <label for="settings-minimumLegDuration-range">
+                  <strong>minimumLegDuration</strong>
+                  <small id="settings-minimumLegDuration-help">Minimum train ride duration (minutes) to avoid penalties.</small>
+                </label>
+                <div class="grid">
+                  <input
+                    type="range"
+                    id="settings-minimumLegDuration-range"
+                    name="minimumLegDuration"
+                    min="1"
+                    max="30"
+                    step="1"
+                    value="10"
+                    data-default-value="10"
+                    aria-describedby="settings-minimumLegDuration-help settings-minimumLegDuration-current"
+                  />
+                  <input
+                    type="number"
+                    id="settings-minimumLegDuration-input"
+                    min="1"
+                    max="30"
+                    step="1"
+                    value="10"
+                    data-default-value="10"
+                    aria-label="minimumLegDuration precise value"
+                  />
+                  <small>Current value: <output id="settings-minimumLegDuration-current" for="settings-minimumLegDuration-range settings-minimumLegDuration-input">10</output></small>
                 </div>
               </div>
             </div>

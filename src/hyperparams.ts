@@ -11,6 +11,8 @@ export interface HyperparamsData {
   preferredCategoryFactor: number;
   shortJourneyLegPenalty: number;
   minimumLegDurationPenalty: number;
+  stationboardLimit: number;
+  minimumLegDuration: number;
 }
 
 export const DEFAULT_HYPERPARAMS: HyperparamsData = {
@@ -26,6 +28,8 @@ export const DEFAULT_HYPERPARAMS: HyperparamsData = {
   preferredCategoryFactor: 0.4,
   shortJourneyLegPenalty: 0.7,
   minimumLegDurationPenalty: 0.8,
+  stationboardLimit: 10,
+  minimumLegDuration: 10,
 };
 
 const HYPERPARAMS_STORAGE_KEY = "trainGameHyperparams";
@@ -42,6 +46,8 @@ const HYPERPARAM_KEYS: (keyof HyperparamsData)[] = [
   "preferredCategoryFactor",
   "shortJourneyLegPenalty",
   "minimumLegDurationPenalty",
+  "stationboardLimit",
+  "minimumLegDuration",
 ];
 
 function isHyperparamsData(value: unknown): value is HyperparamsData {

@@ -43,6 +43,8 @@ BASELINE_HYPERPARAMS = {
     "preferredCategoryFactor": 0.4,
     "shortJourneyLegPenalty": 0.7,
     "minimumLegDurationPenalty": 0.8,
+    "stationboardLimit": 10,
+    "minimumLegDuration": 10,
 }
 
 PREFERRED_CATEGORIES = ["IC", "ICE", "IR", "EC", "TGV", "RE", "RJX"]
@@ -90,14 +92,14 @@ def fetch_train_station_by_name(station_name):
     return [d for d in stations if d.get("icon") == "train"]
 
 
-def fetch_train_station_data(station_id, datetime_for_departure):
+def fetch_train_station_data(station_id, datetime_for_departure, limit=10):
     """Fetch stationboard data for a given station and time."""
     if isinstance(datetime_for_departure, str):
         datetime_for_departure = datetime.datetime.fromisoformat(datetime_for_departure)
         datetime_for_departure = datetime_for_departure.strftime("%Y-%m-%d %H:%M")
 
     def _fetch():
-        info = f"https://transport.opendata.ch/v1/stationboard?id={station_id}&limit=10&datetime={datetime_for_departure}"
+        info = f"https://transport.opendata.ch/v1/stationboard?id={station_id}&limit={limit}&datetime={datetime_for_departure}"
         response = requests.get(info)
         time.sleep(0.1)  # Add delay to avoid rate limiting
         return response.json().get("stationboard", [])
@@ -263,7 +265,7 @@ def compute_weight(candidate, state, current_time, hyperparams):
         distance_factor = max(0, 1 - leg_distance_km / 100)
         weight *= max(0.1, 1 - p["shortJourneyLegPenalty"] * distance_factor)
 
-    # --- Penalize very short duration legs (< 10 minutes) ---
+    # --- Penalize very short duration legs (< minimumLegDuration) ---
     train_dep_str = (train.get("stop") or {}).get("departure")
     leg_arrival_str = stop.get("arrival")
     if train_dep_str and leg_arrival_str:
@@ -271,7 +273,7 @@ def compute_weight(candidate, state, current_time, hyperparams):
             train_dep_dt = datetime.datetime.fromisoformat(train_dep_str)
             leg_arrival_dt = datetime.datetime.fromisoformat(leg_arrival_str)
             duration_minutes = (leg_arrival_dt - train_dep_dt).total_seconds() / 60
-            if duration_minutes < 10:
+            if duration_minutes < p["minimumLegDuration"]:
                 weight *= max(0.1, 1 - p["minimumLegDurationPenalty"])
         except Exception:
             pass
@@ -371,7 +373,7 @@ def simulate_journey(hyperparams: Dict) -> Tuple[pd.DataFrame, Dict]:
     max_hour = int(END_TIME.split("T")[1].split(":")[0])
 
     while int(current_time.split("T")[1].split(":")[0]) < max_hour:
-        data = fetch_train_station_data(current_station_id, current_time)
+        data = fetch_train_station_data(current_station_id, current_time, hyperparams["stationboardLimit"])
         data = deduplicate_stationboard(data, current_time)
         num_trains_available = len(data)
 

@@ -18,6 +18,8 @@ export type HyperparamsData = {
   preferredCategoryFactor: number;
   shortJourneyLegPenalty: number;
   minimumLegDurationPenalty: number;
+  stationboardLimit: number;
+  minimumLegDuration: number;
 };
 
 export type SimulationConfig = {
@@ -196,10 +198,11 @@ export async function fetchTrainStationByName(stationName: string): Promise<Trai
 export async function fetchStationBoard(
   stationId: string,
   dateTime: string,
+  limit: number = 10,
 ): Promise<TrainStationBoardEntry[]> {
   const params = new URLSearchParams({
     id: stationId,
-    limit: "10",
+    limit: limit.toString(),
     datetime: convertTime(dateTime),
   });
   const response = await fetch(
@@ -347,12 +350,12 @@ export function computeWeight(
     weight *= Math.max(0.1, 1 - hyperparams.shortJourneyLegPenalty * distanceFactor);
   }
 
-  // Penalize very short duration legs (< 10 minutes)
+  // Penalize very short duration legs (< minimumLegDuration)
   const trainDeparture = train.stop.departure;
   const legArrival = stop.arrival;
   if (trainDeparture && legArrival) {
     const durationMinutes = diffMinutes(trainDeparture, legArrival);
-    if (durationMinutes !== null && durationMinutes < 10) {
+    if (durationMinutes !== null && durationMinutes < hyperparams.minimumLegDuration) {
       weight *= Math.max(0.1, 1 - hyperparams.minimumLegDurationPenalty);
     }
   }
@@ -463,7 +466,7 @@ export async function runSimulation(config: SimulationConfig): Promise<Simulatio
     }
 
     try {
-      let stationboard = await fetchStationBoard(currentStationId, currentTime);
+      let stationboard = await fetchStationBoard(currentStationId, currentTime, config.hyperparams.stationboardLimit);
       stationboard = deduplicateStationBoard(stationboard, currentTime);
       const numTrainsAvailable = stationboard.length;
       if (numTrainsAvailable === 0) {
