@@ -17,6 +17,7 @@ export type HyperparamsData = {
   alreadySteppedInFactor: number;
   preferredCategoryFactor: number;
   shortJourneyLegPenalty: number;
+  minimumLegDurationPenalty: number;
 };
 
 export type SimulationConfig = {
@@ -212,6 +213,47 @@ export async function fetchStationBoard(
   return data.stationboard ?? [];
 }
 
+export function deduplicateStationBoard(
+  stationboard: TrainStationBoardEntry[],
+  currentTime: string,
+): TrainStationBoardEntry[] {
+  const seen = new Map<string, TrainStationBoardEntry>();
+
+  for (const train of stationboard) {
+    // Create a unique key from category, number, and destination
+    const key = `${train.category}::${train.number}::${train.to ?? ""}`;
+
+    if (!seen.has(key)) {
+      // First occurrence: add it
+      seen.set(key, train);
+    } else {
+      // Subsequent occurrence: keep the earliest valid departure
+      const currentEntry = seen.get(key)!;
+      const currentWaitTime = diffMinutes(currentTime, currentEntry.stop.departure);
+      const newWaitTime = diffMinutes(currentTime, train.stop.departure);
+
+      const currentValid = currentWaitTime === null || currentWaitTime >= 0;
+      const newValid = newWaitTime === null || newWaitTime >= 0;
+
+      // Replace if new is valid and current is not
+      if (newValid && !currentValid) {
+        seen.set(key, train);
+      }
+      // If both valid, replace if new has earlier departure time
+      else if (currentValid && newValid) {
+        const currentTime_ = currentWaitTime ?? Number.POSITIVE_INFINITY;
+        const newTime_ = newWaitTime ?? Number.POSITIVE_INFINITY;
+        if (newTime_ < currentTime_) {
+          seen.set(key, train);
+        }
+      }
+      // Otherwise keep current (both invalid, or current valid and new invalid)
+    }
+  }
+
+  return Array.from(seen.values());
+}
+
 export function haversineKm(
   lat1: number,
   lon1: number,
@@ -277,6 +319,13 @@ export function computeWeight(
     return 0;
   }
 
+  // Hard filter: idle duration must be within [min, max] window
+  if (waitTimeMinutes !== null) {
+    if (waitTimeMinutes < hyperparams.minIdleDuration || waitTimeMinutes > hyperparams.maxIdleDuration) {
+      return 0;
+    }
+  }
+
   let weight = 1;
   const extraStops = stopIndex - hyperparams.minJourneyLegDistance;
   weight *= 1 + extraStops * hyperparams.journeyLegDistanceFactor;
@@ -298,12 +347,21 @@ export function computeWeight(
     weight *= Math.max(0.1, 1 - hyperparams.shortJourneyLegPenalty * distanceFactor);
   }
 
+  // Penalize very short duration legs (< 10 minutes)
+  const trainDeparture = train.stop.departure;
+  const legArrival = stop.arrival;
+  if (trainDeparture && legArrival) {
+    const durationMinutes = diffMinutes(trainDeparture, legArrival);
+    if (durationMinutes !== null && durationMinutes < 10) {
+      weight *= Math.max(0.1, 1 - hyperparams.minimumLegDurationPenalty);
+    }
+  }
+
   if (waitTimeMinutes !== null && hyperparams.idleDurationFactor > 0) {
-    const midpoint = (hyperparams.minIdleDuration + hyperparams.maxIdleDuration) / 2;
-    const range = (hyperparams.maxIdleDuration - hyperparams.minIdleDuration) / 2;
+    const range = hyperparams.maxIdleDuration - hyperparams.minIdleDuration;
     const normalized = range <= 0
-      ? Number(waitTimeMinutes === midpoint)
-      : Math.max(0, 1 - Math.abs(waitTimeMinutes - midpoint) / range);
+      ? 1
+      : Math.max(0, 1 - (waitTimeMinutes - hyperparams.minIdleDuration) / range);
     weight *= 1 + normalized * hyperparams.idleDurationFactor;
   }
 
@@ -405,7 +463,8 @@ export async function runSimulation(config: SimulationConfig): Promise<Simulatio
     }
 
     try {
-      const stationboard = await fetchStationBoard(currentStationId, currentTime);
+      let stationboard = await fetchStationBoard(currentStationId, currentTime);
+      stationboard = deduplicateStationBoard(stationboard, currentTime);
       const numTrainsAvailable = stationboard.length;
       if (numTrainsAvailable === 0) {
         console.warn(`[Iteration ${iterationCount}] No trains available at station ${currentStationId} at ${currentTime}`);

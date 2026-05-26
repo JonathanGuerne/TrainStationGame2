@@ -62,16 +62,18 @@ HYPERPARAMS = {
     "minJourneyLegDistance": 1,
     "journeyLegDistanceFactor": 0.3,
     # --- Idle time between legs (minutes) ---
-    "minIdleDuration": 2,
-    "maxIdleDuration": 60,
+    "minIdleDuration": 7,
+    "maxIdleDuration": 90,
     "idleDurationFactor": 0.1,
     # --- Novelty bonuses (multiplicative, applied as 1 + factor) ---
     "uniqueTrainFactor": 0.5,
-    "uniqueMeanOfTransportFactor": 0.4,
+    "uniqueMeanOfTransportFactor": 0.7,
     # --- Preferred category bonus (multiplicative, applied as 1 + factor) ---
     "preferredCategoryFactor": 0.4,
     # --- Short journey leg penalty (moderated by distance) ---
     "shortJourneyLegPenalty": 0.7,
+    # --- Minimum leg duration penalty (for legs < 10 minutes) ---
+    "minimumLegDurationPenalty": 0.8,
     # --- Penalty multipliers (should be in (0, 1]) ---
     "alreadyVisitedLegFactor": 0.05,
     "alreadySteppedInFactor": 0.2,
@@ -98,6 +100,60 @@ def fetch_train_station_data(station_id, datetime_for_departure):
     response = requests.get(info)
     data = response.json().get("stationboard", [])
     return data
+
+
+def deduplicate_stationboard(stationboard, current_time):
+    """
+    Deduplicate trains by (category, number, destination).
+    Keep only the first train (earliest departure) for each unique line.
+    """
+    seen = {}
+    
+    try:
+        current_dt = datetime.datetime.fromisoformat(current_time)
+    except Exception:
+        return stationboard
+    
+    for train in stationboard:
+        # Create a unique key from category, number, and destination
+        key = f"{train.get('category')}::{train.get('number')}::{train.get('to', '')}"
+        
+        # Check if this train has already been seen
+        if key not in seen:
+            # For the first occurrence, just add it
+            seen[key] = train
+        else:
+            # For subsequent occurrences, keep the one with the earliest departure after min_wait
+            current_entry = seen[key]
+            current_dep_str = (current_entry.get("stop") or {}).get("departure")
+            new_dep_str = (train.get("stop") or {}).get("departure")
+            
+            try:
+                current_dep_dt = datetime.datetime.fromisoformat(current_dep_str) if current_dep_str else None
+                new_dep_dt = datetime.datetime.fromisoformat(new_dep_str) if new_dep_str else None
+                
+                current_wait = (current_dep_dt - current_dt).total_seconds() / 60 if current_dep_dt else None
+                new_wait = (new_dep_dt - current_dt).total_seconds() / 60 if new_dep_dt else None
+                
+                # Keep the train with the earliest departure that hasn't passed yet
+                # Prefer trains with valid (non-negative) wait times
+                current_valid = current_wait is None or current_wait >= 0
+                new_valid = new_wait is None or new_wait >= 0
+                
+                if new_valid and not current_valid:
+                    seen[key] = train
+                elif current_valid and new_valid:
+                    if current_wait is None:
+                        current_wait = float('inf')
+                    if new_wait is None:
+                        new_wait = float('inf')
+                    if new_wait < current_wait:
+                        seen[key] = train
+            except Exception:
+                # If we can't parse times, keep the current entry
+                pass
+    
+    return list(seen.values())
 
 
 def haversine_km(lat1, lon1, lat2, lon2):
@@ -252,12 +308,24 @@ def compute_weight(candidate, state, current_time):
         distance_factor = max(0, 1 - leg_distance_km / 100)
         weight *= max(0.1, 1 - p["shortJourneyLegPenalty"] * distance_factor)
     
-    # --- Idle duration reward (Gaussian-like at midpoint of window) ---
+    # --- Penalize very short duration legs (< 10 minutes) ---
+    train_dep_str = (train.get("stop") or {}).get("departure")
+    leg_arrival_str = stop.get("arrival")
+    if train_dep_str and leg_arrival_str:
+        try:
+            train_dep_dt = datetime.datetime.fromisoformat(train_dep_str)
+            leg_arrival_dt = datetime.datetime.fromisoformat(leg_arrival_str)
+            duration_minutes = (leg_arrival_dt - train_dep_dt).total_seconds() / 60
+            if duration_minutes < 10:
+                weight *= max(0.1, 1 - p["minimumLegDurationPenalty"])
+        except Exception:
+            pass
+    
+    # --- Idle duration reward (linear decay from min to max wait) ---
     if wait_time_minutes is not None and p["idleDurationFactor"] > 0:
-        mid = (p["minIdleDuration"] + p["maxIdleDuration"]) / 2
-        range_val = (p["maxIdleDuration"] - p["minIdleDuration"]) / 2
-        # Gaussian-like reward: 1 at midpoint, decays toward edges
-        normalized = max(0, 1 - abs(wait_time_minutes - mid) / range_val)
+        range_val = p["maxIdleDuration"] - p["minIdleDuration"]
+        # Linear decay: 100% reward at minIdleDuration, 0% at maxIdleDuration
+        normalized = max(0, 1 - (wait_time_minutes - p["minIdleDuration"]) / range_val)
         weight *= 1 + normalized * p["idleDurationFactor"]
     
     # --- Novelty bonuses ---
@@ -329,6 +397,7 @@ while int(current_time.split("T")[1].split(":")[0]) < int(
     print(f"Current station: {current_station_name} at {current_time}")
 
     data = fetch_train_station_data(current_station_id, current_time)
+    data = deduplicate_stationboard(data, current_time)
     num_trains_available = len(data)
 
     # === GENERATION 4: Build ALL (train × stop) candidates, weight them all, select one ===

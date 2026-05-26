@@ -10,20 +10,22 @@ export interface HyperparamsData {
   alreadySteppedInFactor: number;
   preferredCategoryFactor: number;
   shortJourneyLegPenalty: number;
+  minimumLegDurationPenalty: number;
 }
 
 export const DEFAULT_HYPERPARAMS: HyperparamsData = {
   minJourneyLegDistance: 1,
   journeyLegDistanceFactor: 0.3,
-  minIdleDuration: 2,
-  maxIdleDuration: 60,
+  minIdleDuration: 7,
+  maxIdleDuration: 90,
   idleDurationFactor: 0.1,
   uniqueTrainFactor: 0.5,
-  uniqueMeanOfTransportFactor: 0.4,
+  uniqueMeanOfTransportFactor: 0.7,
   alreadyVisitedLegFactor: 0.05,
   alreadySteppedInFactor: 0.2,
   preferredCategoryFactor: 0.4,
   shortJourneyLegPenalty: 0.7,
+  minimumLegDurationPenalty: 0.8,
 };
 
 const HYPERPARAMS_STORAGE_KEY = "trainGameHyperparams";
@@ -39,6 +41,7 @@ const HYPERPARAM_KEYS: (keyof HyperparamsData)[] = [
   "alreadySteppedInFactor",
   "preferredCategoryFactor",
   "shortJourneyLegPenalty",
+  "minimumLegDurationPenalty",
 ];
 
 function isHyperparamsData(value: unknown): value is HyperparamsData {
