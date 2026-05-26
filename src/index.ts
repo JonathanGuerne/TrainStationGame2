@@ -1,36 +1,23 @@
+import {
+  DEFAULT_HYPERPARAMS,
+  loadHyperparameters,
+  resetHyperparametersToDefaults,
+  saveHyperparameters,
+  type HyperparamsData,
+} from "./hyperparams";
+import {
+  fetchTrainStationByName,
+  runSimulation,
+  type SimulationConfig,
+  type SimulationLeg,
+} from "./simulation";
+
 // ============================================================
 // SELECTION HYPERPARAMETERS
 // These are the knobs the GA will optimise. Adjust manually
 // for testing, or let the Python GA sweep them.
 // ============================================================
-const HYPERPARAMS = {
-  // --- Distance (proxy: stop index in passList) ---
-  // Legs shorter than this many stops are discarded entirely
-  minJourneyLegDistance: 1,
-  // Weight multiplier per extra stop beyond the minimum
-  // Higher → prefer longer legs
-  journeyLegDistanceFactor: 0.3,
-
-  // --- Idle time between legs (minutes) ---
-  // If the wait at the current station is outside [min, max], candidate is discarded
-  minIdleDuration: 2,
-  maxIdleDuration: 60,
-  // Reward for idle durations closer to the middle of the window
-  // (not used as a hard filter, just a soft reward — set to 0 to ignore)
-  idleDurationFactor: 0.1,
-
-  // --- Novelty bonuses (multiplicative, applied as 1 + factor) ---
-  // Reward for picking a train number not yet used in this journey
-  uniqueTrainFactor: 0.5,
-  // Reward for picking a transport category (IC, RE, S, Bus…) not yet used
-  uniqueMeanOfTransportFactor: 0.4,
-
-  // --- Penalty multipliers (should be in (0, 1]) ---
-  // Applied when the exact (from → to) leg was already completed
-  alreadyVisitedLegFactor: 0.05,
-  // Applied when the destination station was already visited
-  alreadySteppedInFactor: 0.2,
-};
+let HYPERPARAMS: HyperparamsData = loadHyperparameters();
 // ============================================================
 
 const btnIntro = document.getElementById("btn-intro");
@@ -62,17 +49,175 @@ const sectionLoading = document.getElementById("loading-section");
 const btnValidateTrain = document.getElementById("btn-validate-train");
 const btnClearJourney = document.getElementById("btn-clear-journey");
 const ulJourneyList = document.getElementById("journey-info-list");
+const btnOpenSettings = document.getElementById(
+  "btn-open-settings",
+) as HTMLButtonElement | null;
+const settingsModalArticle = document.getElementById(
+  "settings-modal-article",
+) as HTMLElement | null;
+const settingsForm = document.getElementById(
+  "settings-form",
+) as HTMLFormElement | null;
+const btnSettingsReset = document.getElementById(
+  "btn-settings-reset",
+) as HTMLButtonElement | null;
+const btnSettingsSaveClose = document.getElementById(
+  "btn-settings-save-close",
+) as HTMLButtonElement | null;
+const btnSettingsCancel = document.getElementById(
+  "btn-settings-cancel",
+) as HTMLButtonElement | null;
+const btnOpenSimulation = document.getElementById(
+  "btn-open-simulation",
+) as HTMLButtonElement | null;
+const simulationArticle = document.getElementById(
+  "simulation-article",
+) as HTMLElement | null;
+const btnSimulationBackGame = document.getElementById(
+  "btn-simulation-back-game",
+) as HTMLButtonElement | null;
+const btnSimulationBackIntro = document.getElementById(
+  "btn-simulation-back-intro",
+) as HTMLButtonElement | null;
+const simulationConfigSection = document.getElementById(
+  "simulation-config-section",
+) as HTMLElement | null;
+const simulationForm = document.getElementById(
+  "simulation-form",
+) as HTMLFormElement | null;
+const simStartStationInput = document.getElementById(
+  "sim-start-station",
+) as HTMLInputElement | null;
+const simStartDateTimeInput = document.getElementById(
+  "sim-start-datetime",
+) as HTMLInputElement | null;
+const simEndTimeInput = document.getElementById(
+  "sim-end-time",
+) as HTMLInputElement | null;
+const simHyperparamsDefaultsRadio = document.getElementById(
+  "sim-hyperparams-defaults",
+) as HTMLInputElement | null;
+const simHyperparamsCustomGameRadio = document.getElementById(
+  "sim-hyperparams-custom-game",
+) as HTMLInputElement | null;
+const btnRunSimulation = document.getElementById(
+  "btn-run-simulation",
+) as HTMLButtonElement | null;
+const simulationLoadingSection = document.getElementById(
+  "simulation-loading-section",
+) as HTMLElement | null;
+const simulationLoadingStatus = document.getElementById(
+  "simulation-loading-status",
+) as HTMLElement | null;
+const btnCancelSimulation = document.getElementById(
+  "btn-cancel-simulation",
+) as HTMLButtonElement | null;
+const simulationResultsSection = document.getElementById(
+  "simulation-results-section",
+) as HTMLElement | null;
+const simulationSummaryText = document.getElementById(
+  "simulation-summary-text",
+) as HTMLElement | null;
+const simulationDurationText = document.getElementById(
+  "simulation-duration-text",
+) as HTMLElement | null;
+const simulationResultsBody = document.getElementById(
+  "simulation-results-body",
+) as HTMLTableSectionElement | null;
+const btnExportCsv = document.getElementById(
+  "btn-export-csv",
+) as HTMLButtonElement | null;
+const btnRunAnotherSimulation = document.getElementById(
+  "btn-run-another-simulation",
+) as HTMLButtonElement | null;
+const simulationErrorSection = document.getElementById(
+  "simulation-error-section",
+) as HTMLElement | null;
+const simulationErrorMessage = document.getElementById(
+  "simulation-error-message",
+) as HTMLElement | null;
+const btnTrySimulationAgain = document.getElementById(
+  "btn-try-simulation-again",
+) as HTMLButtonElement | null;
 const DEBUG_PREFIX = "[train-debug]";
+
+type HyperparamControlConfig = {
+  key: keyof HyperparamsData;
+  rangeId: string;
+  inputId: string;
+  outputId: string;
+};
+
+const HYPERPARAM_CONTROL_CONFIG: HyperparamControlConfig[] = [
+  {
+    key: "minJourneyLegDistance",
+    rangeId: "settings-minJourneyLegDistance-range",
+    inputId: "settings-minJourneyLegDistance-input",
+    outputId: "settings-minJourneyLegDistance-current",
+  },
+  {
+    key: "journeyLegDistanceFactor",
+    rangeId: "settings-journeyLegDistanceFactor-range",
+    inputId: "settings-journeyLegDistanceFactor-input",
+    outputId: "settings-journeyLegDistanceFactor-current",
+  },
+  {
+    key: "minIdleDuration",
+    rangeId: "settings-minIdleDuration-range",
+    inputId: "settings-minIdleDuration-input",
+    outputId: "settings-minIdleDuration-current",
+  },
+  {
+    key: "maxIdleDuration",
+    rangeId: "settings-maxIdleDuration-range",
+    inputId: "settings-maxIdleDuration-input",
+    outputId: "settings-maxIdleDuration-current",
+  },
+  {
+    key: "idleDurationFactor",
+    rangeId: "settings-idleDurationFactor-range",
+    inputId: "settings-idleDurationFactor-input",
+    outputId: "settings-idleDurationFactor-current",
+  },
+  {
+    key: "uniqueTrainFactor",
+    rangeId: "settings-uniqueTrainFactor-range",
+    inputId: "settings-uniqueTrainFactor-input",
+    outputId: "settings-uniqueTrainFactor-current",
+  },
+  {
+    key: "uniqueMeanOfTransportFactor",
+    rangeId: "settings-uniqueMeanOfTransportFactor-range",
+    inputId: "settings-uniqueMeanOfTransportFactor-input",
+    outputId: "settings-uniqueMeanOfTransportFactor-current",
+  },
+  {
+    key: "alreadyVisitedLegFactor",
+    rangeId: "settings-alreadyVisitedLegFactor-range",
+    inputId: "settings-alreadyVisitedLegFactor-input",
+    outputId: "settings-alreadyVisitedLegFactor-current",
+  },
+  {
+    key: "alreadySteppedInFactor",
+    rangeId: "settings-alreadySteppedInFactor-range",
+    inputId: "settings-alreadySteppedInFactor-input",
+    outputId: "settings-alreadySteppedInFactor-current",
+  },
+];
+
+let hasUnsavedSettingsReset = false;
+let latestSimulationResults: SimulationLeg[] = [];
+let activeSimulationRequestId = 0;
 
 // ============================================================
 // TYPES
 // ============================================================
 
-type TrainStationResponse = {
+export type TrainStationResponse = {
   stations: TrainStation[];
 };
 
-type TrainStationBoardEntry = {
+export type TrainStationBoardEntry = {
   capacity1st: number;
   capacity2nd: number;
   category: string;
@@ -90,7 +235,7 @@ type TrainStationWithBoardResponse = {
   station: StationRef;
 };
 
-type TrainStation = {
+export type TrainStation = {
   name: string;
   id: string;
   icon: string;
@@ -98,12 +243,13 @@ type TrainStation = {
   distance: number;
 };
 
-type StationRef = {
+export type StationRef = {
   id: string;
   name: string | null;
+  coordinate?: Coordinate | null;
 };
 // Stop: used for the `stop` field on a stationboard entry — departure is required
-type Stop = {
+export type Stop = {
   arrival: string | null;
   arrivalTimestamp: number | null;
   delay: number | null;
@@ -113,7 +259,7 @@ type Stop = {
 };
 
 // PassListItem: entries in a train's passList (departure may be nullable for future stops)
-type PassListItem = {
+export type PassListItem = {
   station: StationRef;
   arrival: string | null;
   arrivalTimestamp: number | null;
@@ -125,7 +271,7 @@ type PassListItem = {
   capacity2nd: number | null;
 };
 
-type Coordinate = { type: string; x: number; y: number };
+export type Coordinate = { type: string; x: number; y: number };
 
 /** Extended to store IDs so journey state can be rebuilt reliably from the cookie */
 type TrainJourneyInfo = {
@@ -160,6 +306,573 @@ type JourneyState = {
   lastDepartureTimestamp: number | null;
 };
 
+function getInputElement(id: string): HTMLInputElement | null {
+  const element = document.getElementById(id);
+  return element instanceof HTMLInputElement ? element : null;
+}
+
+function getOutputElement(id: string): HTMLOutputElement | null {
+  const element = document.getElementById(id);
+  return element instanceof HTMLOutputElement ? element : null;
+}
+
+function clampValueToRange(value: number, rangeElement: HTMLInputElement): number {
+  const min = Number(rangeElement.min);
+  const max = Number(rangeElement.max);
+  return Math.min(max, Math.max(min, value));
+}
+
+function setSyncedControlValue(
+  rangeElement: HTMLInputElement,
+  inputElement: HTMLInputElement,
+  outputElement: HTMLOutputElement,
+  value: number,
+): void {
+  rangeElement.value = String(clampValueToRange(value, rangeElement));
+  const normalisedValue = rangeElement.value;
+  inputElement.value = normalisedValue;
+  outputElement.value = normalisedValue;
+  outputElement.textContent = normalisedValue;
+}
+
+function syncRangeAndInput(
+  rangeId: string,
+  inputId: string,
+  outputId: string,
+): void {
+  const rangeElement = getInputElement(rangeId);
+  const inputElement = getInputElement(inputId);
+  const outputElement = getOutputElement(outputId);
+
+  if (!rangeElement || !inputElement || !outputElement) {
+    return;
+  }
+
+  const syncFromRange = (): void => {
+    inputElement.value = rangeElement.value;
+    outputElement.value = rangeElement.value;
+    outputElement.textContent = rangeElement.value;
+  };
+
+  const syncFromInput = (): void => {
+    const parsedValue = Number(inputElement.value);
+
+    if (Number.isNaN(parsedValue)) {
+      syncFromRange();
+      return;
+    }
+
+    setSyncedControlValue(
+      rangeElement,
+      inputElement,
+      outputElement,
+      parsedValue,
+    );
+  };
+
+  rangeElement.addEventListener("input", syncFromRange);
+  inputElement.addEventListener("change", syncFromInput);
+  syncFromRange();
+}
+
+function applySettingsToUI(params: HyperparamsData): void {
+  for (const control of HYPERPARAM_CONTROL_CONFIG) {
+    const rangeElement = getInputElement(control.rangeId);
+    const inputElement = getInputElement(control.inputId);
+    const outputElement = getOutputElement(control.outputId);
+
+    if (!rangeElement || !inputElement || !outputElement) {
+      continue;
+    }
+
+    setSyncedControlValue(
+      rangeElement,
+      inputElement,
+      outputElement,
+      params[control.key],
+    );
+  }
+}
+
+function loadSettingsIntoUI(): void {
+  applySettingsToUI(HYPERPARAMS);
+}
+
+function readSettingsFromUI(): HyperparamsData {
+  const params = { ...HYPERPARAMS };
+
+  for (const control of HYPERPARAM_CONTROL_CONFIG) {
+    const rangeElement = getInputElement(control.rangeId);
+    const inputElement = getInputElement(control.inputId);
+
+    if (!rangeElement || !inputElement) {
+      continue;
+    }
+
+    const parsedValue = Number(inputElement.value);
+    const clampedValue = Number.isNaN(parsedValue)
+      ? Number(rangeElement.value)
+      : clampValueToRange(parsedValue, rangeElement);
+
+    rangeElement.value = String(clampedValue);
+    inputElement.value = rangeElement.value;
+    params[control.key] = Number(rangeElement.value);
+  }
+
+  return params;
+}
+
+function openSettingsModal(): void {
+  loadSettingsIntoUI();
+  hasUnsavedSettingsReset = false;
+  if (settingsModalArticle) {
+    settingsModalArticle.hidden = false;
+  }
+}
+
+function closeSettingsModal(discardChanges = false): void {
+  if (discardChanges) {
+    if (hasUnsavedSettingsReset) {
+      saveHyperparameters(HYPERPARAMS);
+      hasUnsavedSettingsReset = false;
+    }
+    loadSettingsIntoUI();
+  }
+
+  if (settingsModalArticle) {
+    settingsModalArticle.hidden = true;
+  }
+}
+
+function saveSettingsFromUI(): void {
+  const params = readSettingsFromUI();
+  saveHyperparameters(params);
+  HYPERPARAMS = params;
+  hasUnsavedSettingsReset = false;
+  closeSettingsModal();
+  console.info("Settings saved");
+}
+
+for (const control of HYPERPARAM_CONTROL_CONFIG) {
+  syncRangeAndInput(control.rangeId, control.inputId, control.outputId);
+}
+
+loadSettingsIntoUI();
+
+// ============================================================
+// SIMULATION UI HELPERS
+// ============================================================
+
+type PreparedSimulationInput = {
+  startStationName: string;
+  startDate: Date;
+  endDate: Date;
+  hyperparams: HyperparamsData;
+};
+
+function setElementHidden(element: HTMLElement | null, hidden: boolean): void {
+  if (element) {
+    element.hidden = hidden;
+  }
+}
+
+function setButtonDisabled(
+  button: HTMLButtonElement | null,
+  disabled: boolean,
+): void {
+  if (button) {
+    button.disabled = disabled;
+  }
+}
+
+function setSimulationLoadingStatus(message: string): void {
+  if (simulationLoadingStatus) {
+    simulationLoadingStatus.textContent = message;
+  }
+}
+
+function hideSimulationFeedbackSections(): void {
+  setElementHidden(simulationLoadingSection, true);
+  setElementHidden(simulationResultsSection, true);
+  setElementHidden(simulationErrorSection, true);
+}
+
+function showSimulationFormSection(): void {
+  hideSimulationFeedbackSections();
+  setElementHidden(simulationConfigSection, false);
+  setButtonDisabled(btnRunSimulation, false);
+  setButtonDisabled(btnExportCsv, latestSimulationResults.length === 0);
+}
+
+function showSimulationLoadingSection(message: string): void {
+  setElementHidden(simulationConfigSection, true);
+  setElementHidden(simulationResultsSection, true);
+  setElementHidden(simulationErrorSection, true);
+  setElementHidden(simulationLoadingSection, false);
+  setSimulationLoadingStatus(message);
+  setButtonDisabled(btnRunSimulation, true);
+}
+
+function showSimulationErrorState(message: string): void {
+  setElementHidden(simulationConfigSection, true);
+  setElementHidden(simulationLoadingSection, true);
+  setElementHidden(simulationResultsSection, true);
+  setElementHidden(simulationErrorSection, false);
+  if (simulationErrorMessage) {
+    simulationErrorMessage.textContent = message;
+  }
+  setButtonDisabled(btnRunSimulation, false);
+}
+
+function parseDateInput(value: string): Date | null {
+  const parsedDate = new Date(value);
+  if (Number.isNaN(parsedDate.getTime())) {
+    return null;
+  }
+
+  return parsedDate;
+}
+
+function combineDateAndTime(startDate: Date, endTimeValue: string): Date | null {
+  const timeMatch = endTimeValue.match(/^(\d{2}):(\d{2})$/);
+  if (!timeMatch) {
+    return null;
+  }
+
+  const endDate = new Date(startDate.getTime());
+  endDate.setHours(Number(timeMatch[1]), Number(timeMatch[2]), 0, 0);
+  return endDate;
+}
+
+function getSelectedSimulationHyperparams(): HyperparamsData {
+  if (simHyperparamsCustomGameRadio?.checked) {
+    return { ...HYPERPARAMS };
+  }
+
+  if (simHyperparamsDefaultsRadio?.checked) {
+    return { ...DEFAULT_HYPERPARAMS };
+  }
+
+  return { ...DEFAULT_HYPERPARAMS };
+}
+
+function prepareSimulationInput(): PreparedSimulationInput {
+  const startStationName = simStartStationInput?.value.trim() ?? "";
+  if (!startStationName) {
+    throw new Error("Please enter a start station.");
+  }
+
+  const startDateValue = simStartDateTimeInput?.value ?? "";
+  const startDate = parseDateInput(startDateValue);
+  if (!startDate) {
+    throw new Error("Please choose a valid start date and time.");
+  }
+
+  const endTimeValue = simEndTimeInput?.value ?? "";
+  if (!endTimeValue) {
+    throw new Error("Please choose an end time.");
+  }
+
+  const endDate = combineDateAndTime(startDate, endTimeValue);
+  if (!endDate) {
+    throw new Error("Please choose a valid end time.");
+  }
+
+  if (startDate >= endDate) {
+    throw new Error("End time must be later than the start date and time.");
+  }
+
+  return {
+    startStationName,
+    startDate,
+    endDate,
+    hyperparams: getSelectedSimulationHyperparams(),
+  };
+}
+
+async function resolveSimulationStartStation(
+  stationName: string,
+): Promise<TrainStation> {
+  const stations = await fetchTrainStationByName(stationName);
+  if (stations.length === 0) {
+    throw new Error("Station not found.");
+  }
+
+  const normalizedQuery = stationName.trim().toLowerCase();
+  const exactMatch = stations.find(
+    (station) => station.name.trim().toLowerCase() === normalizedQuery,
+  );
+  const fallbackStation = stations[0];
+
+  if (exactMatch) {
+    return exactMatch;
+  }
+
+  if (!fallbackStation) {
+    throw new Error("Station not found.");
+  }
+
+  return fallbackStation;
+}
+
+function formatSimulationDateTime(value: string): string {
+  const parsedDate = parseDateInput(value);
+  return parsedDate ? parsedDate.toLocaleString() : value;
+}
+
+function formatSimulationNumber(
+  value: number | null | undefined,
+  fractionDigits = 1,
+): string {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return "—";
+  }
+
+  return value.toFixed(fractionDigits);
+}
+
+function formatSimulationWeight(value: number): string {
+  return value.toFixed(6);
+}
+
+function formatSimulationElapsed(elapsedMs: number): string {
+  if (elapsedMs < 1000) {
+    return `${elapsedMs.toFixed(0)} ms`;
+  }
+
+  if (elapsedMs < 60000) {
+    return `${(elapsedMs / 1000).toFixed(1)} s`;
+  }
+
+  return `${(elapsedMs / 60000).toFixed(1)} min`;
+}
+
+function formatSimulationTrain(leg: SimulationLeg): string {
+  return [leg.train_category, leg.train_number].filter(Boolean).join(" ");
+}
+
+function getSimulationTotalDistance(legs: SimulationLeg[]): number {
+  const lastLeg = legs[legs.length - 1];
+  if (lastLeg && lastLeg.cumulative_distance_km > 0) {
+    return lastLeg.cumulative_distance_km;
+  }
+
+  return Number(
+    legs
+      .reduce((sum, leg) => sum + (leg.leg_distance_km ?? 0), 0)
+      .toFixed(3),
+  );
+}
+
+function clearSimulationResultsTable(): void {
+  if (simulationResultsBody) {
+    simulationResultsBody.innerHTML = "";
+  }
+}
+
+function renderSimulationResults(
+  legs: SimulationLeg[],
+  elapsedMs: number,
+): void {
+  latestSimulationResults = legs;
+  clearSimulationResultsTable();
+
+  const totalDistance = getSimulationTotalDistance(legs);
+  if (simulationSummaryText) {
+    simulationSummaryText.textContent = `Simulation complete: ${legs.length} legs, ${totalDistance.toFixed(3)} km total distance`;
+  }
+  if (simulationDurationText) {
+    simulationDurationText.textContent = `Calculated in ${formatSimulationElapsed(elapsedMs)}`;
+  }
+
+  if (simulationResultsBody) {
+    const fragment = document.createDocumentFragment();
+
+    legs.forEach((leg, index) => {
+      const row = document.createElement("tr");
+      const values = [
+        String(index + 1),
+        leg.departure_station_name,
+        leg.arrival_station_name,
+        formatSimulationTrain(leg),
+        formatSimulationDateTime(leg.departure_time),
+        formatSimulationDateTime(leg.arrival_time),
+        formatSimulationNumber(leg.wait_time_minutes, 1),
+        formatSimulationNumber(leg.duration_minutes, 1),
+        formatSimulationNumber(leg.leg_distance_km, 3),
+        formatSimulationWeight(leg.selection_weight),
+      ];
+
+      values.forEach((value) => {
+        const cell = document.createElement("td");
+        cell.textContent = value;
+        row.appendChild(cell);
+      });
+
+      fragment.appendChild(row);
+    });
+
+    simulationResultsBody.appendChild(fragment);
+  }
+
+  setElementHidden(simulationConfigSection, true);
+  setElementHidden(simulationLoadingSection, true);
+  setElementHidden(simulationErrorSection, true);
+  setElementHidden(simulationResultsSection, false);
+  setButtonDisabled(btnRunSimulation, false);
+  setButtonDisabled(btnExportCsv, false);
+}
+
+function escapeCsvValue(value: string | number | null | undefined): string {
+  return `"${String(value ?? "").replaceAll("\"", '""')}"`;
+}
+
+function exportSimulationResultsAsCsv(): void {
+  if (latestSimulationResults.length === 0) {
+    return;
+  }
+
+  const headers = [
+    "Leg#",
+    "From Station",
+    "To Station",
+    "Train",
+    "Departure",
+    "Arrival",
+    "Wait (min)",
+    "Duration (min)",
+    "Distance (km)",
+    "Weight",
+  ];
+
+  const rows = latestSimulationResults.map((leg, index) => [
+    index + 1,
+    leg.departure_station_name,
+    leg.arrival_station_name,
+    formatSimulationTrain(leg),
+    leg.departure_time,
+    leg.arrival_time,
+    leg.wait_time_minutes ?? "",
+    leg.duration_minutes ?? "",
+    leg.leg_distance_km ?? "",
+    leg.selection_weight,
+  ]);
+
+  const csvContent = [headers, ...rows]
+    .map((row) => row.map((value) => escapeCsvValue(value)).join(","))
+    .join("\r\n");
+
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const downloadUrl = URL.createObjectURL(blob);
+  const downloadLink = document.createElement("a");
+  downloadLink.href = downloadUrl;
+  downloadLink.download = `journey_simulation_${new Date().toISOString().replaceAll(/[:.]/g, "-")}.csv`;
+  downloadLink.style.display = "none";
+  document.body.appendChild(downloadLink);
+  downloadLink.click();
+  downloadLink.remove();
+  URL.revokeObjectURL(downloadUrl);
+}
+
+function resetSimulationForm(): void {
+  activeSimulationRequestId += 1;
+  simulationForm?.reset();
+  latestSimulationResults = [];
+  clearSimulationResultsTable();
+  if (simulationSummaryText) {
+    simulationSummaryText.textContent = "";
+  }
+  if (simulationDurationText) {
+    simulationDurationText.textContent = "";
+  }
+  if (simulationErrorMessage) {
+    simulationErrorMessage.textContent = "";
+  }
+  setButtonDisabled(btnExportCsv, true);
+  showSimulationFormSection();
+  simStartStationInput?.focus();
+}
+
+function openSimulationArticle(): void {
+  introArticle?.setAttribute("hidden", "true");
+  gameArticle?.setAttribute("hidden", "true");
+  simulationArticle?.removeAttribute("hidden");
+  hideSimulationFeedbackSections();
+  setElementHidden(simulationConfigSection, false);
+  setButtonDisabled(btnExportCsv, latestSimulationResults.length === 0);
+  simStartStationInput?.focus();
+}
+
+function getSimulationErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) {
+    if (error.message.toLowerCase().includes("station not found")) {
+      return "Station not found. Please enter a valid train station name.";
+    }
+
+    return error.message;
+  }
+
+  return "Simulation failed. Please try again.";
+}
+
+async function handleSimulationFormSubmit(event: SubmitEvent): Promise<void> {
+  event.preventDefault();
+
+  let preparedInput: PreparedSimulationInput;
+  try {
+    preparedInput = prepareSimulationInput();
+  } catch (error) {
+    showSimulationErrorState(getSimulationErrorMessage(error));
+    return;
+  }
+
+  const simulationStartedAt = performance.now();
+  const requestId = activeSimulationRequestId + 1;
+  activeSimulationRequestId = requestId;
+
+  try {
+    showSimulationLoadingSection("Looking up start station...");
+    const startStation = await resolveSimulationStartStation(
+      preparedInput.startStationName,
+    );
+    if (requestId !== activeSimulationRequestId) {
+      return;
+    }
+
+    const config: SimulationConfig = {
+      startStationName: startStation.name,
+      startStationId: startStation.id,
+      startTime: preparedInput.startDate.toISOString(),
+      endTime: preparedInput.endDate.toISOString(),
+      hyperparams: preparedInput.hyperparams,
+    };
+
+    setSimulationLoadingStatus("Running simulation...");
+    const legs = await runSimulation(config);
+    if (requestId !== activeSimulationRequestId) {
+      return;
+    }
+
+    if (legs.length === 0) {
+      throw new Error(
+        "No journey legs matched your criteria. Try a different station, time range, or hyperparameter mode.",
+      );
+    }
+
+    setSimulationLoadingStatus("Preparing results...");
+    renderSimulationResults(legs, performance.now() - simulationStartedAt);
+  } catch (error) {
+    if (requestId !== activeSimulationRequestId) {
+      return;
+    }
+
+    console.error("Simulation failed", error);
+    showSimulationErrorState(getSimulationErrorMessage(error));
+  }
+}
+
+setButtonDisabled(btnExportCsv, true);
+
 // ============================================================
 // UI EVENT HANDLERS
 // ============================================================
@@ -172,6 +885,47 @@ btnIntro?.addEventListener("click", () => {
 
 btnReloadTrain?.addEventListener("click", () => {
   updateUITrain();
+});
+
+btnOpenSimulation?.addEventListener("click", () => {
+  openSimulationArticle();
+});
+
+btnSimulationBackGame?.addEventListener("click", () => {
+  activeSimulationRequestId += 1;
+  simulationArticle?.setAttribute("hidden", "true");
+  introArticle?.setAttribute("hidden", "true");
+  gameArticle?.removeAttribute("hidden");
+});
+
+btnSimulationBackIntro?.addEventListener("click", () => {
+  activeSimulationRequestId += 1;
+  simulationArticle?.setAttribute("hidden", "true");
+  gameArticle?.setAttribute("hidden", "true");
+  introArticle?.removeAttribute("hidden");
+});
+
+simulationForm?.addEventListener("submit", (event) => {
+  void handleSimulationFormSubmit(event);
+});
+
+btnCancelSimulation?.addEventListener("click", () => {
+  activeSimulationRequestId += 1;
+  showSimulationFormSection();
+  simStartStationInput?.focus();
+});
+
+btnExportCsv?.addEventListener("click", () => {
+  exportSimulationResultsAsCsv();
+});
+
+btnRunAnotherSimulation?.addEventListener("click", () => {
+  resetSimulationForm();
+});
+
+btnTrySimulationAgain?.addEventListener("click", () => {
+  showSimulationFormSection();
+  simStartStationInput?.focus();
 });
 
 btnValidateTrain?.addEventListener("click", () => {
@@ -203,6 +957,31 @@ btnClearJourney?.addEventListener("click", () => {
 btnBackIntro?.addEventListener("click", () => {
   gameArticle?.setAttribute("hidden", "true");
   introArticle?.removeAttribute("hidden");
+});
+
+btnOpenSettings?.addEventListener("click", () => {
+  openSettingsModal();
+});
+
+btnSettingsReset?.addEventListener("click", () => {
+  const defaultHyperparams = resetHyperparametersToDefaults();
+  hasUnsavedSettingsReset = true;
+  applySettingsToUI(defaultHyperparams);
+});
+
+settingsForm?.addEventListener("submit", (event) => {
+  event.preventDefault();
+  saveSettingsFromUI();
+});
+
+btnSettingsCancel?.addEventListener("click", () => {
+  closeSettingsModal(true);
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !settingsModalArticle?.hidden) {
+    closeSettingsModal(true);
+  }
 });
 
 // ============================================================
@@ -379,8 +1158,8 @@ function buildStateFromHistory(history: TrainJourneyInfo[]): JourneyState {
   }
 
   // Use the departure timestamp of the most recent leg as the idle reference
-  if (history.length > 0) {
-    const lastEntry = history[history.length - 1];
+  const lastEntry = history[history.length - 1];
+  if (lastEntry) {
     // The arrival time of the last leg is the earliest we can depart again
     // Parse the HH:MM:SS string into a today-relative timestamp (seconds)
     const parsed = parseTimeToTimestamp(lastEntry.arrivalTime);
@@ -397,7 +1176,10 @@ function buildStateFromHistory(history: TrainJourneyInfo[]): JourneyState {
 function parseTimeToTimestamp(timeStr: string): number | null {
   const parts = timeStr.split(":").map(Number);
   if (parts.length < 2 || parts.some(isNaN)) return null;
-  const [h, m, s = 0] = parts;
+  const h = parts[0];
+  const m = parts[1];
+  const s = parts[2] ?? 0;
+  if (h === undefined || m === undefined) return null;
   const now = new Date();
   now.setHours(h, m, s, 0);
   return Math.floor(now.getTime() / 1000);
@@ -418,7 +1200,7 @@ function buildCandidates(
     // index 0 is the departure stop itself — skip it
     for (let i = 1; i < passList.length; i++) {
       const stop = passList[i];
-      if (!stop.arrival || !stop.station?.name) continue;
+      if (!stop || !stop.arrival || !stop.station?.name) continue;
       candidates.push({ train, stop, stopIndex: i });
     }
   }
@@ -460,7 +1242,9 @@ function computeWeight(
     const mid = (p.minIdleDuration + p.maxIdleDuration) / 2;
     const range = (p.maxIdleDuration - p.minIdleDuration) / 2;
     // Gaussian-like reward: 1 at midpoint, decays toward edges
-    const normalised = Math.max(0, 1 - Math.abs(idleMinutes - mid) / range);
+    const normalised = range <= 0
+      ? Number(idleMinutes === mid)
+      : Math.max(0, 1 - Math.abs(idleMinutes - mid) / range);
     weight *= 1 + normalised * p.idleDurationFactor;
   }
 
@@ -490,17 +1274,33 @@ function computeWeight(
 
 /** Weighted random pick from an array given parallel weight values */
 function weightedRandomPick<T>(items: T[], weights: number[]): T {
-  const total = weights.reduce((s, w) => s + w, 0);
+  const total = weights.reduce((sum, weight) => sum + Math.max(weight, 0), 0);
   if (total === 0)
     throw new Error(
       "All candidates have zero weight — no valid journey possible.",
     );
+
   let r = Math.random() * total;
+  let fallback: T | undefined;
+
   for (let i = 0; i < items.length; i++) {
-    r -= weights[i];
-    if (r <= 0) return items[i];
+    const item = items[i];
+    const weight = Math.max(weights[i] ?? 0, 0);
+
+    if (item === undefined || weight <= 0) {
+      continue;
+    }
+
+    fallback = item;
+    r -= weight;
+    if (r <= 0) return item;
   }
-  return items[items.length - 1];
+
+  if (fallback === undefined) {
+    throw new Error("No candidate available for weighted selection.");
+  }
+
+  return fallback;
 }
 
 // ============================================================

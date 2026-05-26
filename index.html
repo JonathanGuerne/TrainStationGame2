@@ -66,9 +66,13 @@
           <h1>TRAIN GAME <span id="game-icon">🚂</span></h1>
         </header>
         <section>
-          <button id="btn-back-intro">Take me back!</button>
-          <button id="btn-reload-train">Reload Train</button>
-          <button id="btn-clear-journey">Clear My Journey</button>
+          <div class="grid">
+            <button id="btn-back-intro">Take me back!</button>
+            <button id="btn-reload-train">Reload Train</button>
+            <button id="btn-clear-journey">Clear My Journey</button>
+            <button id="btn-open-simulation">Run Simulation</button>
+            <button id="btn-open-settings" class="secondary">Settings</button>
+          </div>
           <h2>All Aboard!</h2>
         </section>
         <section>
@@ -97,6 +101,445 @@
         <footer>
           <p>May the rails be with you!</p>
         </footer>
+      </article>
+
+      <article id="simulation-article" hidden>
+        <header>
+          <h1>Journey Simulation</h1>
+          <div class="grid">
+            <button id="btn-simulation-back-game" type="button" class="secondary">Back to Game</button>
+            <button id="btn-simulation-back-intro" type="button" class="secondary">Back to Intro</button>
+          </div>
+        </header>
+
+        <section id="simulation-config-section">
+          <form id="simulation-form">
+            <fieldset>
+              <legend>Simulation Setup</legend>
+              <label for="sim-start-station">
+                Start Station
+                <input
+                  type="text"
+                  id="sim-start-station"
+                  name="startStation"
+                  placeholder="e.g. Zürich HB"
+                  autocomplete="off"
+                  required
+                />
+              </label>
+
+              <div class="grid">
+                <label for="sim-start-datetime">
+                  Start Date &amp; Time
+                  <input
+                    type="datetime-local"
+                    id="sim-start-datetime"
+                    name="startDateTime"
+                    required
+                  />
+                </label>
+
+                <label for="sim-end-time">
+                  End Time
+                  <input type="time" id="sim-end-time" name="endTime" required />
+                </label>
+              </div>
+
+              <fieldset>
+                <legend>Hyperparameters</legend>
+                <label for="sim-hyperparams-defaults">
+                  <input
+                    type="radio"
+                    id="sim-hyperparams-defaults"
+                    name="sim-hyperparams-mode"
+                    value="defaults"
+                    checked
+                  />
+                  Use game defaults
+                </label>
+                <label for="sim-hyperparams-custom-game">
+                  <input
+                    type="radio"
+                    id="sim-hyperparams-custom-game"
+                    name="sim-hyperparams-mode"
+                    value="custom-game"
+                  />
+                  Use custom settings from game
+                </label>
+              </fieldset>
+
+              <button id="btn-run-simulation" type="submit">Run Simulation</button>
+            </fieldset>
+          </form>
+        </section>
+
+        <section id="simulation-loading-section" hidden aria-live="polite">
+          <h2>Running simulation...</h2>
+          <p id="simulation-loading-status">Running simulation... Leg X of Y</p>
+          <progress aria-label="Simulation progress"></progress>
+          <button id="btn-cancel-simulation" type="button" class="secondary">Cancel</button>
+        </section>
+
+        <section id="simulation-results-section" hidden aria-live="polite">
+          <header>
+            <h2>Simulation Results</h2>
+            <p id="simulation-summary-text">Simulation complete: X legs, Y km total distance</p>
+            <p id="simulation-duration-text">Duration of simulation</p>
+          </header>
+
+          <div style="overflow-x: auto;">
+            <table id="simulation-results-table" class="striped">
+              <thead>
+                <tr>
+                  <th scope="col">Leg#</th>
+                  <th scope="col">From Station</th>
+                  <th scope="col">To Station</th>
+                  <th scope="col">Train (Line)</th>
+                  <th scope="col">Departure</th>
+                  <th scope="col">Arrival</th>
+                  <th scope="col">Wait (min)</th>
+                  <th scope="col">Duration (min)</th>
+                  <th scope="col">Distance (km)</th>
+                  <th scope="col">Weight</th>
+                </tr>
+              </thead>
+              <tbody id="simulation-results-body"></tbody>
+            </table>
+          </div>
+
+          <div class="grid">
+            <button id="btn-export-csv" type="button">Export as CSV</button>
+            <button id="btn-run-another-simulation" type="button" class="secondary">Run Another Simulation</button>
+          </div>
+        </section>
+
+        <section id="simulation-error-section" hidden aria-live="assertive">
+          <h2>Simulation Error</h2>
+          <p id="simulation-error-message"></p>
+          <button id="btn-try-simulation-again" type="button" class="secondary">Try Again</button>
+        </section>
+
+        <footer>
+          <p>May the rails be with you!</p>
+        </footer>
+      </article>
+
+      <article
+        id="settings-modal-article"
+        hidden
+        aria-labelledby="settings-modal-title"
+        aria-modal="true"
+        role="dialog"
+        style="max-width: 1080px; margin-inline: auto;"
+      >
+        <header>
+          <h2 id="settings-modal-title">Game Settings</h2>
+          <p>Tune the train selection hyperparameters and save when you are ready.</p>
+        </header>
+
+        <form id="settings-form">
+          <fieldset>
+            <legend>Journey Distance</legend>
+            <div class="grid">
+              <div>
+                <label for="settings-minJourneyLegDistance-range">
+                  <strong>minJourneyLegDistance</strong>
+                  <small id="settings-minJourneyLegDistance-help">Discard journey legs shorter than this many stops.</small>
+                </label>
+                <div class="grid">
+                  <input
+                    type="range"
+                    id="settings-minJourneyLegDistance-range"
+                    name="minJourneyLegDistance"
+                    min="0"
+                    max="20"
+                    step="1"
+                    value="1"
+                    data-default-value="1"
+                    aria-describedby="settings-minJourneyLegDistance-help settings-minJourneyLegDistance-current"
+                  />
+                  <input
+                    type="number"
+                    id="settings-minJourneyLegDistance-input"
+                    min="0"
+                    max="20"
+                    step="1"
+                    value="1"
+                    data-default-value="1"
+                    aria-label="minJourneyLegDistance precise value"
+                  />
+                  <small>Current value: <output id="settings-minJourneyLegDistance-current" for="settings-minJourneyLegDistance-range settings-minJourneyLegDistance-input">1</output></small>
+                </div>
+              </div>
+
+              <div>
+                <label for="settings-journeyLegDistanceFactor-range">
+                  <strong>journeyLegDistanceFactor</strong>
+                  <small id="settings-journeyLegDistanceFactor-help">Increase the weight for each extra stop beyond the minimum distance.</small>
+                </label>
+                <div class="grid">
+                  <input
+                    type="range"
+                    id="settings-journeyLegDistanceFactor-range"
+                    name="journeyLegDistanceFactor"
+                    min="0"
+                    max="3"
+                    step="0.05"
+                    value="0.3"
+                    data-default-value="0.3"
+                    aria-describedby="settings-journeyLegDistanceFactor-help settings-journeyLegDistanceFactor-current"
+                  />
+                  <input
+                    type="number"
+                    id="settings-journeyLegDistanceFactor-input"
+                    min="0"
+                    max="3"
+                    step="0.05"
+                    value="0.3"
+                    data-default-value="0.3"
+                    aria-label="journeyLegDistanceFactor precise value"
+                  />
+                  <small>Current value: <output id="settings-journeyLegDistanceFactor-current" for="settings-journeyLegDistanceFactor-range settings-journeyLegDistanceFactor-input">0.3</output></small>
+                </div>
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Idle Duration</legend>
+            <div class="grid">
+              <div>
+                <label for="settings-minIdleDuration-range">
+                  <strong>minIdleDuration</strong>
+                  <small id="settings-minIdleDuration-help">Minimum wait time in minutes before a candidate leg is allowed.</small>
+                </label>
+                <div class="grid">
+                  <input
+                    type="range"
+                    id="settings-minIdleDuration-range"
+                    name="minIdleDuration"
+                    min="0"
+                    max="120"
+                    step="1"
+                    value="2"
+                    data-default-value="2"
+                    aria-describedby="settings-minIdleDuration-help settings-minIdleDuration-current"
+                  />
+                  <input
+                    type="number"
+                    id="settings-minIdleDuration-input"
+                    min="0"
+                    max="120"
+                    step="1"
+                    value="2"
+                    data-default-value="2"
+                    aria-label="minIdleDuration precise value"
+                  />
+                  <small>Current value: <output id="settings-minIdleDuration-current" for="settings-minIdleDuration-range settings-minIdleDuration-input">2</output></small>
+                </div>
+              </div>
+
+              <div>
+                <label for="settings-maxIdleDuration-range">
+                  <strong>maxIdleDuration</strong>
+                  <small id="settings-maxIdleDuration-help">Maximum wait time in minutes before a candidate leg is discarded.</small>
+                </label>
+                <div class="grid">
+                  <input
+                    type="range"
+                    id="settings-maxIdleDuration-range"
+                    name="maxIdleDuration"
+                    min="0"
+                    max="120"
+                    step="1"
+                    value="60"
+                    data-default-value="60"
+                    aria-describedby="settings-maxIdleDuration-help settings-maxIdleDuration-current"
+                  />
+                  <input
+                    type="number"
+                    id="settings-maxIdleDuration-input"
+                    min="0"
+                    max="120"
+                    step="1"
+                    value="60"
+                    data-default-value="60"
+                    aria-label="maxIdleDuration precise value"
+                  />
+                  <small>Current value: <output id="settings-maxIdleDuration-current" for="settings-maxIdleDuration-range settings-maxIdleDuration-input">60</output></small>
+                </div>
+              </div>
+
+              <div>
+                <label for="settings-idleDurationFactor-range">
+                  <strong>idleDurationFactor</strong>
+                  <small id="settings-idleDurationFactor-help">Reward idle times that sit close to the middle of the allowed window.</small>
+                </label>
+                <div class="grid">
+                  <input
+                    type="range"
+                    id="settings-idleDurationFactor-range"
+                    name="idleDurationFactor"
+                    min="0"
+                    max="3"
+                    step="0.05"
+                    value="0.1"
+                    data-default-value="0.1"
+                    aria-describedby="settings-idleDurationFactor-help settings-idleDurationFactor-current"
+                  />
+                  <input
+                    type="number"
+                    id="settings-idleDurationFactor-input"
+                    min="0"
+                    max="3"
+                    step="0.05"
+                    value="0.1"
+                    data-default-value="0.1"
+                    aria-label="idleDurationFactor precise value"
+                  />
+                  <small>Current value: <output id="settings-idleDurationFactor-current" for="settings-idleDurationFactor-range settings-idleDurationFactor-input">0.1</output></small>
+                </div>
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Journey Variety</legend>
+            <div class="grid">
+              <div>
+                <label for="settings-uniqueTrainFactor-range">
+                  <strong>uniqueTrainFactor</strong>
+                  <small id="settings-uniqueTrainFactor-help">Reward train numbers that have not been used in the current journey.</small>
+                </label>
+                <div class="grid">
+                  <input
+                    type="range"
+                    id="settings-uniqueTrainFactor-range"
+                    name="uniqueTrainFactor"
+                    min="0"
+                    max="3"
+                    step="0.05"
+                    value="0.5"
+                    data-default-value="0.5"
+                    aria-describedby="settings-uniqueTrainFactor-help settings-uniqueTrainFactor-current"
+                  />
+                  <input
+                    type="number"
+                    id="settings-uniqueTrainFactor-input"
+                    min="0"
+                    max="3"
+                    step="0.05"
+                    value="0.5"
+                    data-default-value="0.5"
+                    aria-label="uniqueTrainFactor precise value"
+                  />
+                  <small>Current value: <output id="settings-uniqueTrainFactor-current" for="settings-uniqueTrainFactor-range settings-uniqueTrainFactor-input">0.5</output></small>
+                </div>
+              </div>
+
+              <div>
+                <label for="settings-uniqueMeanOfTransportFactor-range">
+                  <strong>uniqueMeanOfTransportFactor</strong>
+                  <small id="settings-uniqueMeanOfTransportFactor-help">Reward transport categories that have not been used yet.</small>
+                </label>
+                <div class="grid">
+                  <input
+                    type="range"
+                    id="settings-uniqueMeanOfTransportFactor-range"
+                    name="uniqueMeanOfTransportFactor"
+                    min="0"
+                    max="3"
+                    step="0.05"
+                    value="0.4"
+                    data-default-value="0.4"
+                    aria-describedby="settings-uniqueMeanOfTransportFactor-help settings-uniqueMeanOfTransportFactor-current"
+                  />
+                  <input
+                    type="number"
+                    id="settings-uniqueMeanOfTransportFactor-input"
+                    min="0"
+                    max="3"
+                    step="0.05"
+                    value="0.4"
+                    data-default-value="0.4"
+                    aria-label="uniqueMeanOfTransportFactor precise value"
+                  />
+                  <small>Current value: <output id="settings-uniqueMeanOfTransportFactor-current" for="settings-uniqueMeanOfTransportFactor-range settings-uniqueMeanOfTransportFactor-input">0.4</output></small>
+                </div>
+              </div>
+
+              <div>
+                <label for="settings-alreadyVisitedLegFactor-range">
+                  <strong>alreadyVisitedLegFactor</strong>
+                  <small id="settings-alreadyVisitedLegFactor-help">Reduce the score when the exact from-to leg has already been completed.</small>
+                </label>
+                <div class="grid">
+                  <input
+                    type="range"
+                    id="settings-alreadyVisitedLegFactor-range"
+                    name="alreadyVisitedLegFactor"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value="0.05"
+                    data-default-value="0.05"
+                    aria-describedby="settings-alreadyVisitedLegFactor-help settings-alreadyVisitedLegFactor-current"
+                  />
+                  <input
+                    type="number"
+                    id="settings-alreadyVisitedLegFactor-input"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value="0.05"
+                    data-default-value="0.05"
+                    aria-label="alreadyVisitedLegFactor precise value"
+                  />
+                  <small>Current value: <output id="settings-alreadyVisitedLegFactor-current" for="settings-alreadyVisitedLegFactor-range settings-alreadyVisitedLegFactor-input">0.05</output></small>
+                </div>
+              </div>
+
+              <div>
+                <label for="settings-alreadySteppedInFactor-range">
+                  <strong>alreadySteppedInFactor</strong>
+                  <small id="settings-alreadySteppedInFactor-help">Reduce the score when the destination station has already been visited.</small>
+                </label>
+                <div class="grid">
+                  <input
+                    type="range"
+                    id="settings-alreadySteppedInFactor-range"
+                    name="alreadySteppedInFactor"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value="0.2"
+                    data-default-value="0.2"
+                    aria-describedby="settings-alreadySteppedInFactor-help settings-alreadySteppedInFactor-current"
+                  />
+                  <input
+                    type="number"
+                    id="settings-alreadySteppedInFactor-input"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value="0.2"
+                    data-default-value="0.2"
+                    aria-label="alreadySteppedInFactor precise value"
+                  />
+                  <small>Current value: <output id="settings-alreadySteppedInFactor-current" for="settings-alreadySteppedInFactor-range settings-alreadySteppedInFactor-input">0.2</output></small>
+                </div>
+              </div>
+            </div>
+          </fieldset>
+
+          <footer>
+            <div class="grid">
+              <button type="button" id="btn-settings-reset" class="secondary">Reset to Defaults</button>
+              <button type="submit" id="btn-settings-save-close">Save &amp; Close</button>
+              <button type="button" id="btn-settings-cancel" class="contrast">Cancel</button>
+            </div>
+          </footer>
+        </form>
       </article>
     </main>
     <footer>
