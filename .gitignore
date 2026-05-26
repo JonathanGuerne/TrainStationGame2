@@ -1,2 +1,7 @@
 dist
 node_modules
+testing/api_cache
+*.csv
+*pyc
+*.ipynb
+*.json
