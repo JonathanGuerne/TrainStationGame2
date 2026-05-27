@@ -1272,7 +1272,7 @@ async function getManualLocationInput(): Promise<TrainStation | null> {
         }
 
         const index = parseInt(choice, 10) - 1;
-        if (index >= 0 && index < stations.length) {
+        if (!Number.isNaN(index) && index >= 0 && index < stations.length) {
           resolve(stations[index]!);
         } else {
           alert("Invalid selection.");
