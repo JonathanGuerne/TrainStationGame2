@@ -1074,7 +1074,12 @@ btnUseCurrentLocation?.addEventListener("click", async (e) => {
   btnUseCurrentLocation.disabled = true;
   btnUseCurrentLocation.textContent = "📍 Finding...";
   try {
-    const [lat, lon] = await getCurrentPlayerGPSLocation();
+    const coords = await getCurrentPlayerGPSLocation();
+    if (!coords) {
+      alert("Location input was cancelled.");
+      return;
+    }
+    const [lat, lon] = coords;
     const station = await fetchTrainStationData(lat, lon);
     if (station) {
       if (simStartStationInput) simStartStationInput.value = station.name;
@@ -1084,7 +1089,7 @@ btnUseCurrentLocation?.addEventListener("click", async (e) => {
     }
   } catch (error) {
     console.error("Failed to get current location:", error);
-    alert("Could not get your location. Please enable location access.");
+    alert("Could not get your location. Please enable location access or enter manually.");
   } finally {
     btnUseCurrentLocation.disabled = false;
     btnUseCurrentLocation.textContent = "📍 Use Current";
@@ -1228,13 +1233,70 @@ function updateUIJourneyListInfo() {
 // DATA FETCHING
 // ============================================================
 
-async function getCurrentPlayerGPSLocation(): Promise<[number, number]> {
+async function getManualLocationInput(): Promise<TrainStation | null> {
+  return new Promise((resolve) => {
+    const stationName = prompt("Enter a train station name (e.g., Zürich HB):");
+    if (!stationName || stationName.trim() === "") {
+      resolve(null);
+      return;
+    }
+
+    fetchTrainStationByName(stationName)
+      .then((stations) => {
+        if (stations.length === 0) {
+          alert("No train station found with that name.");
+          resolve(null);
+          return;
+        }
+
+        if (stations.length === 1) {
+          const station = stations[0];
+          resolve(station ?? null);
+          return;
+        }
+
+        // If multiple stations found, use the first one (or ask user to choose)
+        const stationList = stations
+          .map((s, i) => `${i + 1}. ${s.name}`)
+          .join("\n");
+        const choice = prompt(
+          `Multiple stations found:\n${stationList}\n\nEnter the number of your choice (1-${stations.length}):`,
+        );
+
+        if (!choice) {
+          resolve(null);
+          return;
+        }
+
+        const index = parseInt(choice, 10) - 1;
+        if (index >= 0 && index < stations.length) {
+          const station = stations[index];
+          resolve(station ?? null);
+        } else {
+          alert("Invalid selection.");
+          resolve(null);
+        }
+      })
+      .catch((error) => {
+        console.error("Error fetching station by name:", error);
+        alert("Failed to fetch station information.");
+        resolve(null);
+      });
+  });
+}
+
+async function getCurrentPlayerGPSLocation(): Promise<[number, number] | null> {
   if (!navigator.geolocation) {
-    throw new Error("Geolocation is not supported by this browser.");
+    // Browser doesn't support geolocation, fallback to manual input
+    const station = await getManualLocationInput();
+    if (station) {
+      return [station.coordinate.y, station.coordinate.x];
+    }
+    return null;
   }
   const geolocationStartedAt = performance.now();
   debugLog("Requesting current geolocation");
-  return new Promise<[number, number]>((resolve, reject) => {
+  return new Promise<[number, number] | null>((resolve, reject) => {
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const coords = {
@@ -1252,7 +1314,19 @@ async function getCurrentPlayerGPSLocation(): Promise<[number, number]> {
           `${DEBUG_PREFIX} Geolocation failed after ${formatDurationMs(geolocationStartedAt)}`,
           error,
         );
-        reject(error);
+        // Offer manual location input as fallback
+        debugLog("Offering manual location input as fallback");
+        getManualLocationInput()
+          .then((station) => {
+            if (station) {
+              resolve([station.coordinate.y, station.coordinate.x]);
+            } else {
+              reject(new Error("Manual location input was cancelled."));
+            }
+          })
+          .catch((fallbackError) => {
+            reject(fallbackError);
+          });
       },
     );
   });
@@ -1546,7 +1620,11 @@ function getRandomTrainJourney(
 async function updateTrainInfo(): Promise<void> {
   const updateStartedAt = performance.now();
   debugLog("Starting train info refresh");
-  const [lat, lon] = await getCurrentPlayerGPSLocation();
+  const coords = await getCurrentPlayerGPSLocation();
+  if (!coords) {
+    throw new Error("Could not get location from GPS or manual input.");
+  }
+  const [lat, lon] = coords;
   const fetchedTrainStationData = await fetchTrainStationData(lat, lon);
   if (!fetchedTrainStationData)
     throw new Error("No train station found nearby.");
