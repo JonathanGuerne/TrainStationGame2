@@ -1233,6 +1233,10 @@ function updateUIJourneyListInfo() {
 // DATA FETCHING
 // ============================================================
 
+function stationToCoordinates(station: TrainStation): [number, number] {
+  return [station.coordinate.y, station.coordinate.x];
+}
+
 async function getManualLocationInput(): Promise<TrainStation | null> {
   return new Promise((resolve) => {
     const stationName = prompt("Enter a train station name (e.g., Zürich HB):");
@@ -1250,12 +1254,11 @@ async function getManualLocationInput(): Promise<TrainStation | null> {
         }
 
         if (stations.length === 1) {
-          const station = stations[0];
-          resolve(station ?? null);
+          resolve(stations[0]!);
           return;
         }
 
-        // If multiple stations found, use the first one (or ask user to choose)
+        // If multiple stations found, ask user to choose
         const stationList = stations
           .map((s, i) => `${i + 1}. ${s.name}`)
           .join("\n");
@@ -1270,8 +1273,7 @@ async function getManualLocationInput(): Promise<TrainStation | null> {
 
         const index = parseInt(choice, 10) - 1;
         if (index >= 0 && index < stations.length) {
-          const station = stations[index];
-          resolve(station ?? null);
+          resolve(stations[index]!);
         } else {
           alert("Invalid selection.");
           resolve(null);
@@ -1290,7 +1292,7 @@ async function getCurrentPlayerGPSLocation(): Promise<[number, number] | null> {
     // Browser doesn't support geolocation, fallback to manual input
     const station = await getManualLocationInput();
     if (station) {
-      return [station.coordinate.y, station.coordinate.x];
+      return stationToCoordinates(station);
     }
     return null;
   }
@@ -1319,9 +1321,10 @@ async function getCurrentPlayerGPSLocation(): Promise<[number, number] | null> {
         getManualLocationInput()
           .then((station) => {
             if (station) {
-              resolve([station.coordinate.y, station.coordinate.x]);
+              resolve(stationToCoordinates(station));
             } else {
-              reject(new Error("Manual location input was cancelled."));
+              // User cancelled manual location input
+              resolve(null);
             }
           })
           .catch((fallbackError) => {
