@@ -78,7 +78,6 @@
         </header>
         <section>
           <div class="grid">
-            <button id="btn-reload-train">Reload Train</button>
             <button id="btn-clear-journey">Clear My Journey</button>
           </div>
           <h2>All Aboard!</h2>
@@ -86,6 +85,33 @@
         <section>
           <h2>Game Instructions</h2>
           <p>Follow the on-screen instructions to take your next train.</p>
+        </section>
+        <section id="station-selection-section">
+          <h2>Select Starting Station</h2>
+          <form id="station-selection-form">
+            <label for="game-station-input">
+              Station Name
+              <input
+                type="text"
+                id="game-station-input"
+                name="stationName"
+                placeholder="e.g. Zürich HB"
+                autocomplete="off"
+              />
+            </label>
+            <div class="grid">
+              <button id="btn-game-use-location" type="button" class="secondary">📍 Use Current Location</button>
+              <button id="btn-game-search-station" type="submit">🔍 Search</button>
+            </div>
+            <button id="btn-game-cancel-geolocation" type="button" hidden style="margin-top: 0.5rem; width: 100%;">✕ Cancel Location</button>
+          </form>
+          <button id="btn-reload-train" type="button" style="margin-top: 0.5rem; width: 100%; display: block;">🔄 Reload Train</button>
+          <div id="game-station-search-results" hidden style="margin-top: 1rem;">
+            <h3>Search Results</h3>
+            <div id="game-station-results-list" style="display: flex; flex-direction: column; gap: 0.5rem;">
+              <!-- Results will be appended here -->
+            </div>
+          </div>
         </section>
         <section id="train-details-section" hidden>
           <h2>Next Train</h2>

@@ -11,6 +11,9 @@ import {
   type SimulationConfig,
   type SimulationLeg,
 } from "./simulation";
+import {
+  deduplicateCandidatesByDestination,
+} from "./candidateSelection";
 
 // ============================================================
 // TOAST NOTIFICATIONS
@@ -133,7 +136,7 @@ const arrivalPlatformDiv = document.getElementById(
 const arrivalPlatformLine = document.getElementById(
   "arrival-platform-line",
 ) as HTMLElement | null;
-const btnReloadTrain = document.getElementById("btn-reload-train");
+const btnReloadTrain = document.getElementById("btn-reload-train") as HTMLButtonElement | null;
 const sectionError = document.getElementById("error-section");
 const sectionTrainDetails = document.getElementById("train-details-section");
 const sectionLoading = document.getElementById("loading-section");
@@ -176,6 +179,30 @@ const btnUseCurrentLocation = document.getElementById(
 const btnRunSimulation = document.getElementById(
   "btn-run-simulation",
 ) as HTMLButtonElement | null;
+const stationSelectionForm = document.getElementById(
+  "station-selection-form",
+) as HTMLFormElement | null;
+const stationSelectionSection = document.getElementById(
+  "station-selection-section",
+) as HTMLElement | null;
+const gameStationInput = document.getElementById(
+  "game-station-input",
+) as HTMLInputElement | null;
+const btnGameUseLocation = document.getElementById(
+  "btn-game-use-location",
+) as HTMLButtonElement | null;
+const btnGameSearchStation = document.getElementById(
+  "btn-game-search-station",
+) as HTMLButtonElement | null;
+const btnGameCancelGeolocation = document.getElementById(
+  "btn-game-cancel-geolocation",
+) as HTMLButtonElement | null;
+const gameStationSearchResults = document.getElementById(
+  "game-station-search-results",
+) as HTMLElement | null;
+const gameStationResultsList = document.getElementById(
+  "game-station-results-list",
+) as HTMLElement | null;
 const simulationLoadingSection = document.getElementById(
   "simulation-loading-section",
 ) as HTMLElement | null;
@@ -311,6 +338,10 @@ const HYPERPARAM_CONTROL_CONFIG: HyperparamControlConfig[] = [
 let hasUnsavedSettingsReset = false;
 let latestSimulationResults: SimulationLeg[] = [];
 let activeSimulationRequestId = 0;
+let selectedManualStation: TrainStation | null = null;
+let geolocationAbortController: AbortController | null = null;
+let cachedStartStation: TrainStation | null = null;
+let firstTrainLoaded = false;
 
 // ============================================================
 // TYPES
@@ -559,7 +590,7 @@ function saveLastSimulationStation(stationName: string): void {
   try {
     localStorage.setItem(LAST_SIMULATION_STATION_KEY, stationName);
   } catch (error) {
-    console.warn("Failed to save last simulation station", error);
+    // console.warn("Failed to save last simulation station", error);
   }
 }
 
@@ -567,7 +598,7 @@ function getLastSimulationStation(): string | null {
   try {
     return localStorage.getItem(LAST_SIMULATION_STATION_KEY);
   } catch (error) {
-    console.warn("Failed to retrieve last simulation station", error);
+    // console.warn("Failed to retrieve last simulation station", error);
     return null;
   }
 }
@@ -674,9 +705,12 @@ function combineDateAndTime(startDate: Date, endTimeValue: string): Date | null 
 
 function setDefaultSimulationTimes(): void {
   const today = new Date();
-  const year = today.getFullYear();
-  const month = String(today.getMonth() + 1).padStart(2, "0");
-  const day = String(today.getDate()).padStart(2, "0");
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  
+  const year = tomorrow.getFullYear();
+  const month = String(tomorrow.getMonth() + 1).padStart(2, "0");
+  const day = String(tomorrow.getDate()).padStart(2, "0");
   
   if (simStartDateTimeInput) {
     simStartDateTimeInput.value = `${year}-${month}-${day}T08:00`;
@@ -1016,12 +1050,13 @@ async function handleSimulationFormSubmit(event: SubmitEvent): Promise<void> {
       return;
     }
 
-    console.error("Simulation failed", error);
+    // console.error("Simulation failed", error);
     showSimulationErrorState(getSimulationErrorMessage(error));
   }
 }
 
 setButtonDisabled(btnExportCsv, true);
+setButtonDisabled(btnReloadTrain as HTMLButtonElement, true);
 
 // ============================================================
 // UI EVENT HANDLERS
@@ -1032,7 +1067,8 @@ btnIntro?.addEventListener("click", () => {
   gameArticle?.removeAttribute("hidden");
   settingsModalArticle?.setAttribute("hidden", "true");
   simulationArticle?.setAttribute("hidden", "true");
-  updateUITrain();
+  // Automatically attempt geolocation when starting the game
+  attemptAutoGeolocation();
 });
 
 navIntro?.addEventListener("click", (e) => {
@@ -1049,7 +1085,8 @@ navGame?.addEventListener("click", (e) => {
   gameArticle?.removeAttribute("hidden");
   settingsModalArticle?.setAttribute("hidden", "true");
   simulationArticle?.setAttribute("hidden", "true");
-  updateUITrain();
+  // Automatically attempt geolocation when viewing the game
+  attemptAutoGeolocation();
 });
 
 navSimulation?.addEventListener("click", (e) => {
@@ -1066,7 +1103,7 @@ navSettings?.addEventListener("click", (e) => {
 });
 
 btnReloadTrain?.addEventListener("click", () => {
-  updateUITrain();
+  reloadTrain();
 });
 
 btnUseCurrentLocation?.addEventListener("click", async (e) => {
@@ -1088,7 +1125,7 @@ btnUseCurrentLocation?.addEventListener("click", async (e) => {
       alert("No train station found nearby.");
     }
   } catch (error) {
-    console.error("Failed to get current location:", error);
+    // console.error("Failed to get current location:", error);
     alert("Could not get your location. Please enable location access or enter manually.");
   } finally {
     btnUseCurrentLocation.disabled = false;
@@ -1159,6 +1196,115 @@ settingsForm?.addEventListener("submit", (event) => {
   saveSettingsFromUI();
 });
 
+stationSelectionForm?.addEventListener("submit", (event) => {
+  void handleGameStationSearch(event);
+});
+
+btnGameUseLocation?.addEventListener("click", async (e) => {
+  e.preventDefault();
+  debugLog("USE CURRENT LOCATION: Button clicked");
+  
+  // Cancel any previous geolocation request
+  if (geolocationAbortController) {
+    debugLog("USE CURRENT LOCATION: Aborting previous geolocation request");
+    geolocationAbortController.abort();
+  }
+  
+  // Create new abort controller
+  geolocationAbortController = new AbortController();
+  const signal = geolocationAbortController.signal;
+  
+  // Keep station selection visible while loading, just disable the button
+  btnGameUseLocation.disabled = true;
+  btnGameUseLocation.textContent = "📍 Finding location...";
+  // Show cancel button
+  if (btnGameCancelGeolocation) {
+    btnGameCancelGeolocation.removeAttribute("hidden");
+  }
+  sectionLoading?.removeAttribute("hidden");
+  debugLog("USE CURRENT LOCATION: UI disabled, starting geolocation");
+  try {
+    const coords = await getCurrentPlayerGPSLocation();
+    debugLog("USE CURRENT LOCATION: Got GPS coords", { coords });
+    if (signal.aborted) {
+      debugLog("USE CURRENT LOCATION: Request was aborted after geolocation");
+      return;
+    }
+    if (!coords) {
+      alert("Location input was cancelled.");
+      return;
+    }
+    const [lat, lon] = coords;
+    debugLog("USE CURRENT LOCATION: Fetching station data", { lat, lon });
+    const station = await fetchTrainStationData(lat, lon);
+    debugLog("USE CURRENT LOCATION: Got station data", { station: station?.name });
+    if (signal.aborted) {
+      debugLog("USE CURRENT LOCATION: Request was aborted after station fetch");
+      return;
+    }
+    if (station) {
+      // Set station name in input field
+      if (gameStationInput) {
+        gameStationInput.value = station.name;
+      }
+      // Cache the station so updateTrainInfo() doesn't need to fetch it again
+      cachedStartStation = station;
+      selectedManualStation = null;
+      debugLog("USE CURRENT LOCATION: Cached station, calling updateUITrain");
+      sectionLoading?.setAttribute("hidden", "true");
+      updateUITrain();
+    } else {
+      alert("No train station found nearby.");
+      sectionLoading?.setAttribute("hidden", "true");
+      // Restore button state
+      btnGameUseLocation.disabled = false;
+      btnGameUseLocation.textContent = "📍 Use Current Location";
+    }
+  } catch (error) {
+    if (signal.aborted) {
+      debugLog("USE CURRENT LOCATION: Error after abort (expected)");
+      // On abort, restore button state
+      btnGameUseLocation.disabled = false;
+      btnGameUseLocation.textContent = "📍 Use Current Location";
+      return;
+    }
+    // console.error("Failed to get current location:", error);
+    alert("Could not get your location. Please enable location access or enter manually.");
+    sectionLoading?.setAttribute("hidden", "true");
+    // On error, restore button state
+    btnGameUseLocation.disabled = false;
+    btnGameUseLocation.textContent = "📍 Use Current Location";
+  } finally {
+    // Hide cancel button
+    if (btnGameCancelGeolocation) {
+      btnGameCancelGeolocation.setAttribute("hidden", "true");
+    }
+    geolocationAbortController = null;
+    // Don't restore button state here - let updateUITrain() handle the phase 2 feedback
+    // Button will be restored by updateUITrain() after trains are loaded
+  }
+});
+
+btnGameCancelGeolocation?.addEventListener("click", (e) => {
+  e.preventDefault();
+  debugLog("CANCEL GEOLOCATION: User clicked cancel");
+  if (geolocationAbortController) {
+    debugLog("CANCEL GEOLOCATION: Aborting geolocation request");
+    geolocationAbortController.abort();
+  }
+  // Hide loading section
+  sectionLoading?.setAttribute("hidden", "true");
+  // Hide cancel button
+  if (btnGameCancelGeolocation) {
+    btnGameCancelGeolocation.setAttribute("hidden", "true");
+  }
+  // Re-enable use location button
+  if (btnGameUseLocation) {
+    btnGameUseLocation.disabled = false;
+    btnGameUseLocation.textContent = "📍 Use Current Location";
+  }
+});
+
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && !settingsModalArticle?.hidden) {
     navGame?.click();
@@ -1183,12 +1329,21 @@ function formatTimeOnly(isoDateTimeString: string): string {
 }
 
 function debugLog(message: string, details?: unknown): void {
+  const timestamp = new Date().toLocaleTimeString('en-US', { 
+    hour12: false, 
+    hour: '2-digit', 
+    minute: '2-digit', 
+    second: '2-digit', 
+    fractionalSecondDigits: 3 
+  });
+  const prefix = `${DEBUG_PREFIX} [${timestamp}]`;
+  
   if (details === undefined) {
-    console.info(`${DEBUG_PREFIX} ${message}`);
+    // console.info(`${prefix} ${message}`);
     return;
   }
 
-  console.info(`${DEBUG_PREFIX} ${message}`, details);
+  // console.info(`${prefix} ${message}`, details);
 }
 
 function updateUITrain() {
@@ -1196,8 +1351,76 @@ function updateUITrain() {
   debugLog("Reload train requested");
   sectionError?.setAttribute("hidden", "true");
   sectionTrainDetails?.setAttribute("hidden", "true");
+  // NEVER hide stationSelectionSection - it should always be visible
   sectionLoading?.removeAttribute("hidden");
+  
+  // Show phase 2 feedback: trains are loading
+  if (btnGameUseLocation) {
+    btnGameUseLocation.disabled = true;
+    btnGameUseLocation.textContent = "🚂 Loading trains...";
+  }
+  if (btnReloadTrain) {
+    btnReloadTrain.disabled = true;
+    btnReloadTrain.textContent = "🚂 Loading trains...";
+  }
+  
   updateTrainInfo()
+    .then(() => {
+      sectionLoading?.setAttribute("hidden", "true");
+      sectionTrainDetails?.removeAttribute("hidden");
+      debugLog(`Reload train finished in ${formatDurationMs(reloadStartedAt)}`);
+      
+      // Restore button states
+      if (btnGameUseLocation) {
+        btnGameUseLocation.disabled = false;
+        btnGameUseLocation.textContent = "📍 Use Current Location";
+      }
+      
+      // Enable reload button after first successful train load
+      if (!firstTrainLoaded) {
+        firstTrainLoaded = true;
+        if (btnReloadTrain) {
+          btnReloadTrain.disabled = false;
+          btnReloadTrain.textContent = "🔄 Reload Train";
+          debugLog("Reload train button enabled");
+        }
+      } else {
+        // Reload button already enabled, just restore text
+        if (btnReloadTrain) {
+          btnReloadTrain.disabled = false;
+          btnReloadTrain.textContent = "🔄 Reload Train";
+        }
+      }
+    })
+    .catch((error) => {
+      sectionLoading?.setAttribute("hidden", "true");
+      sectionError?.removeAttribute("hidden");
+      
+      // Restore button states on error
+      if (btnGameUseLocation) {
+        btnGameUseLocation.disabled = false;
+        btnGameUseLocation.textContent = "📍 Use Current Location";
+      }
+      if (btnReloadTrain) {
+        btnReloadTrain.disabled = false;
+        btnReloadTrain.textContent = "🔄 Reload Train";
+      }
+      
+      // console.error(
+      //   `${DEBUG_PREFIX} Reload train failed after ${formatDurationMs(reloadStartedAt)}`,
+      //   error,
+      // );
+    });
+  updateUIJourneyListInfo();
+}
+
+function reloadTrain() {
+  const reloadStartedAt = performance.now();
+  debugLog("Reload train requested (cache-only)");
+  sectionError?.setAttribute("hidden", "true");
+  sectionTrainDetails?.setAttribute("hidden", "true");
+  sectionLoading?.removeAttribute("hidden");
+  updateTrainInfo(true) // Skip geolocation, use only cached/selected station
     .then(() => {
       sectionLoading?.setAttribute("hidden", "true");
       sectionTrainDetails?.removeAttribute("hidden");
@@ -1206,12 +1429,86 @@ function updateUITrain() {
     .catch((error) => {
       sectionLoading?.setAttribute("hidden", "true");
       sectionError?.removeAttribute("hidden");
-      console.error(
-        `${DEBUG_PREFIX} Reload train failed after ${formatDurationMs(reloadStartedAt)}`,
-        error,
-      );
+      // console.error(
+      //   `${DEBUG_PREFIX} Reload train failed after ${formatDurationMs(reloadStartedAt)}`,
+      //   error,
+      // );
     });
   updateUIJourneyListInfo();
+}
+
+async function attemptAutoGeolocation(): Promise<void> {
+  sectionError?.setAttribute("hidden", "true");
+  sectionTrainDetails?.setAttribute("hidden", "true");
+  // Station selection always visible
+  stationSelectionSection?.removeAttribute("hidden");
+  sectionLoading?.removeAttribute("hidden");
+  
+  // Cancel any previous geolocation request
+  if (geolocationAbortController) {
+    geolocationAbortController.abort();
+  }
+  
+  // Create new abort controller for this auto-geolocation attempt
+  geolocationAbortController = new AbortController();
+  const signal = geolocationAbortController.signal;
+  
+  // Disable the button during auto-geolocation and show cancel button
+  if (btnGameUseLocation) {
+    btnGameUseLocation.disabled = true;
+    btnGameUseLocation.textContent = "📍 Finding location...";
+  }
+  if (btnGameCancelGeolocation) {
+    btnGameCancelGeolocation.removeAttribute("hidden");
+  }
+  
+  try {
+    const coords = await getCurrentPlayerGPSLocation();
+    if (signal.aborted) {
+      return;
+    }
+    if (!coords) {
+      // Geolocation cancelled or failed, keep station selection visible
+      sectionLoading?.setAttribute("hidden", "true");
+      gameStationInput?.focus();
+      return;
+    }
+    const [lat, lon] = coords;
+    const station = await fetchTrainStationData(lat, lon);
+    if (signal.aborted) {
+      return;
+    }
+    if (!station) {
+      throw new Error("No train station found nearby.");
+    }
+    // Set station name in input field
+    if (gameStationInput) {
+      gameStationInput.value = station.name;
+    }
+    // Cache the station so updateTrainInfo doesn't need to fetch geolocation again
+    cachedStartStation = station;
+    updateUITrain();
+  } catch (error) {
+    // Geolocation failed, keep station selection visible
+    if (!signal.aborted) {
+      debugLog("Auto-geolocation failed, showing station selection", error);
+      sectionLoading?.setAttribute("hidden", "true");
+      gameStationInput?.focus();
+      // Restore button state on error
+      if (btnGameUseLocation) {
+        btnGameUseLocation.disabled = false;
+        btnGameUseLocation.textContent = "📍 Use Current Location";
+      }
+    }
+  } finally {
+    // Hide cancel button
+    if (btnGameCancelGeolocation) {
+      btnGameCancelGeolocation.setAttribute("hidden", "true");
+    }
+    geolocationAbortController = null;
+    // Don't restore button state here - let updateUITrain() handle the phase 2 feedback
+    // Button will be restored by updateUITrain() after trains are loaded
+  }
 }
 
 function updateUIJourneyListInfo() {
@@ -1235,6 +1532,81 @@ function updateUIJourneyListInfo() {
 
 function stationToCoordinates(station: TrainStation): [number, number] {
   return [station.coordinate.y, station.coordinate.x];
+}
+
+async function displayStationSearchResults(stations: TrainStation[]): Promise<void> {
+  if (!gameStationResultsList || !gameStationSearchResults) return;
+  
+  gameStationResultsList.innerHTML = "";
+  
+  if (stations.length === 0) {
+    gameStationResultsList.innerHTML = '<p style="color: var(--muted-color);">No stations found.</p>';
+    gameStationSearchResults.removeAttribute("hidden");
+    return;
+  }
+  
+  const fragment = document.createDocumentFragment();
+  for (const station of stations) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "secondary";
+    button.textContent = station.name;
+    button.style.textAlign = "left";
+    button.addEventListener("click", (e) => {
+      e.preventDefault();
+      selectStation(station);
+    });
+    fragment.appendChild(button);
+  }
+  
+  gameStationResultsList.appendChild(fragment);
+  gameStationSearchResults.removeAttribute("hidden");
+}
+
+function selectStation(station: TrainStation): void {
+  selectedManualStation = station;
+  if (gameStationInput) {
+    gameStationInput.value = station.name;
+  }
+  if (gameStationSearchResults) {
+    gameStationSearchResults.setAttribute("hidden", "true");
+  }
+  showToast(`Station selected: ${station.name}`);
+  updateUITrain();
+}
+
+async function handleGameStationSearch(event: SubmitEvent): Promise<void> {
+  event.preventDefault();
+  
+  // Cancel any pending geolocation when search is performed
+  if (geolocationAbortController) {
+    geolocationAbortController.abort();
+    geolocationAbortController = null;
+  }
+  
+  const stationName = gameStationInput?.value.trim();
+  if (!stationName) {
+    alert("Please enter a station name.");
+    return;
+  }
+  
+  try {
+    if (btnGameSearchStation) {
+      btnGameSearchStation.disabled = true;
+      btnGameSearchStation.textContent = "🔍 Searching...";
+    }
+    
+    const stations = await fetchTrainStationByName(stationName);
+    displayStationSearchResults(stations);
+  } catch (error) {
+    // console.error("Station search failed:", error);
+    alert("Failed to search for stations. Please try again.");
+  } finally {
+    if (btnGameSearchStation) {
+      btnGameSearchStation.disabled = false;
+      btnGameSearchStation.textContent = "🔍 Search";
+    }
+  }
 }
 
 async function getManualLocationInput(): Promise<TrainStation | null> {
@@ -1280,7 +1652,7 @@ async function getManualLocationInput(): Promise<TrainStation | null> {
         }
       })
       .catch((error) => {
-        console.error("Error fetching station by name:", error);
+        // console.error("Error fetching station by name:", error);
         alert("Failed to fetch station information.");
         resolve(null);
       });
@@ -1290,31 +1662,42 @@ async function getManualLocationInput(): Promise<TrainStation | null> {
 async function getCurrentPlayerGPSLocation(): Promise<[number, number] | null> {
   if (!navigator.geolocation) {
     // Browser doesn't support geolocation, fallback to manual input
+    debugLog("GEOLOCATION: Browser does not support geolocation API");
     const station = await getManualLocationInput();
     if (station) {
       return stationToCoordinates(station);
     }
     return null;
   }
+  
+  // Log the call stack to see where this is being called from
+  const stack = new Error().stack?.split('\n').slice(0, 5).join('\n') || 'N/A';
+  
   const geolocationStartedAt = performance.now();
-  debugLog("Requesting current geolocation");
+  debugLog("GEOLOCATION: Calling navigator.geolocation.getCurrentPosition - CALLER STACK:", { stack });
   return new Promise<[number, number] | null>((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      debugLog("GEOLOCATION: Timeout - no response after 60s");
+    }, 60000);
+    
     navigator.geolocation.getCurrentPosition(
       (position) => {
+        clearTimeout(timeoutId);
         const coords = {
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
         };
         debugLog(
-          `Geolocation resolved in ${formatDurationMs(geolocationStartedAt)}`,
+          `GEOLOCATION: Success in ${formatDurationMs(geolocationStartedAt)}`,
           coords,
         );
         resolve([coords.latitude, coords.longitude]);
       },
       (error) => {
-        console.error(
-          `${DEBUG_PREFIX} Geolocation failed after ${formatDurationMs(geolocationStartedAt)}`,
-          error,
+        clearTimeout(timeoutId);
+        debugLog(
+          `GEOLOCATION: Error after ${formatDurationMs(geolocationStartedAt)}`,
+          { errorCode: error.code, errorMessage: error.message },
         );
         // Offer manual location input as fallback
         debugLog("Offering manual location input as fallback");
@@ -1340,16 +1723,19 @@ async function fetchTrainStationData(
   lon: number,
 ): Promise<TrainStation | undefined> {
   const stationFetchStartedAt = performance.now();
-  debugLog("Fetching nearby stations", { lat, lon });
+  debugLog("FETCH_STATION: Starting fetch", { lat, lon });
   const response = await fetch(
     `https://transport.opendata.ch/v1/locations?x=${lon}&y=${lat}&type=station`,
   );
+  debugLog("FETCH_STATION: Got response", { status: response.status, ok: response.ok });
   if (!response.ok) throw new Error("Failed to fetch train data.");
   debugLog(
-    `Nearby stations API responded in ${formatDurationMs(stationFetchStartedAt)}`,
+    `FETCH_STATION: API responded in ${formatDurationMs(stationFetchStartedAt)}`,
     { status: response.status },
   );
+  debugLog("FETCH_STATION: Parsing JSON response");
   const stations: TrainStationResponse = await response.json();
+  debugLog("FETCH_STATION: JSON parsed, searching for train station", { stationCount: stations.stations?.length });
   if (!stations.stations || stations.stations.length === 0) return undefined;
 
   stations.stations.sort((a, b) => a.distance - b.distance);
@@ -1357,7 +1743,7 @@ async function fetchTrainStationData(
     (station) => station.icon === "train",
   );
   debugLog(
-    `Processed ${stations.stations.length} nearby stations in ${formatDurationMs(stationFetchStartedAt)}`,
+    `FETCH_STATION: Processed ${stations.stations.length} stations in ${formatDurationMs(stationFetchStartedAt)}`,
     closestTrainStation
       ? {
           closestTrainStation: closestTrainStation.name,
@@ -1575,9 +1961,20 @@ function getRandomTrainJourney(
   state: JourneyState,
 ): TrainJourneyInfo {
   const selectionStartedAt = performance.now();
-  const candidates = buildCandidates(possibilities);
+  let candidates = buildCandidates(possibilities);
   if (candidates.length === 0)
     throw new Error("No valid candidates after flattening.");
+
+  const beforeDedup = candidates.length;
+  candidates = deduplicateCandidatesByDestination(
+    candidates,
+    HYPERPARAMS.minIdleDuration,
+    HYPERPARAMS.maxIdleDuration,
+    state.lastDepartureTimestamp,
+  );
+  debugLog(
+    `Deduplication filtered from ${beforeDedup} to ${candidates.length} candidates by destination`,
+  );
 
   const weights = candidates.map((c) => computeWeight(c, state));
   debugLog(
@@ -1620,20 +2017,39 @@ function getRandomTrainJourney(
 // UPDATE LOOP
 // ============================================================
 
-async function updateTrainInfo(): Promise<void> {
+async function updateTrainInfo(skipGeolocationFallback = false): Promise<void> {
   const updateStartedAt = performance.now();
-  debugLog("Starting train info refresh");
-  const coords = await getCurrentPlayerGPSLocation();
-  if (!coords) {
-    throw new Error("Could not get location from GPS or manual input.");
+  debugLog("UPDATE_TRAIN_INFO: Starting train info refresh", { skipGeolocationFallback });
+  
+  let fetchedTrainStationData: TrainStation;
+  
+  if (cachedStartStation) {
+    // Use cached station from auto-geolocation (keep for reloads)
+    debugLog("UPDATE_TRAIN_INFO: Using cached start station", { station: cachedStartStation.name });
+    fetchedTrainStationData = cachedStartStation;
+  } else if (selectedManualStation) {
+    // Use manually selected station (keep for reloads)
+    debugLog("UPDATE_TRAIN_INFO: Using manually selected station", { station: selectedManualStation.name });
+    fetchedTrainStationData = selectedManualStation;
+  } else if (skipGeolocationFallback) {
+    // For reload button: skip geolocation if no cached/manual station
+    throw new Error("No station available. Load a train first.");
+  } else {
+    // Use geolocation as fallback
+    debugLog("UPDATE_TRAIN_INFO: No cached/manual station, falling back to geolocation");
+    const coords = await getCurrentPlayerGPSLocation();
+    if (!coords) {
+      throw new Error("Could not get location from GPS or manual input.");
+    }
+    const [lat, lon] = coords;
+    const station = await fetchTrainStationData(lat, lon);
+    if (!station)
+      throw new Error("No train station found nearby.");
+    fetchedTrainStationData = station;
   }
-  const [lat, lon] = coords;
-  const fetchedTrainStationData = await fetchTrainStationData(lat, lon);
-  if (!fetchedTrainStationData)
-    throw new Error("No train station found nearby.");
 
   const nextTrainData = await fetchNextTrain(fetchedTrainStationData.id);
-  if (!nextTrainData) throw new Error("No next train data found.");
+  if (!nextTrainData) throw new Error("No next train data found");
 
   const stateBuildStartedAt = performance.now();
   const history = getCookieJourneyInfo();

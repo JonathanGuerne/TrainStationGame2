@@ -63,7 +63,7 @@ export function loadHyperparameters(): HyperparamsData {
     const storedValue = localStorage.getItem(HYPERPARAMS_STORAGE_KEY);
 
     if (!storedValue) {
-      console.info("No saved hyperparameters found. Using defaults.");
+      // console.info("No saved hyperparameters found. Using defaults.");
       return DEFAULT_HYPERPARAMS;
     }
 
@@ -73,10 +73,10 @@ export function loadHyperparameters(): HyperparamsData {
       return parsedValue;
     }
 
-    console.warn("Saved hyperparameters were invalid. Using defaults.");
+    // console.warn("Saved hyperparameters were invalid. Using defaults.");
     return DEFAULT_HYPERPARAMS;
   } catch (error) {
-    console.error("Failed to load hyperparameters. Using defaults.", error);
+    // console.error("Failed to load hyperparameters. Using defaults.", error);
     return DEFAULT_HYPERPARAMS;
   }
 }
@@ -86,7 +86,7 @@ export function saveHyperparameters(params: HyperparamsData): boolean {
     localStorage.setItem(HYPERPARAMS_STORAGE_KEY, JSON.stringify(params));
     return true;
   } catch (error) {
-    console.error("Failed to save hyperparameters.", error);
+    // console.error("Failed to save hyperparameters.", error);
     return false;
   }
 }
@@ -94,9 +94,9 @@ export function saveHyperparameters(params: HyperparamsData): boolean {
 export function resetHyperparametersToDefaults(): HyperparamsData {
   try {
     localStorage.removeItem(HYPERPARAMS_STORAGE_KEY);
-    console.info("Hyperparameters reset to defaults.");
+    // console.info("Hyperparameters reset to defaults.");
   } catch (error) {
-    console.error("Failed to reset hyperparameters. Returning defaults.", error);
+    // console.error("Failed to reset hyperparameters. Returning defaults.", error);
   }
 
   return DEFAULT_HYPERPARAMS;
