@@ -245,6 +245,27 @@ const simulationErrorMessage = document.getElementById(
 const btnTrySimulationAgain = document.getElementById(
   "btn-try-simulation-again",
 ) as HTMLButtonElement | null;
+const confirmDeleteLegDialog = document.getElementById(
+  "confirm-delete-leg-dialog",
+) as HTMLDialogElement | null;
+const btnCancelDelete = document.getElementById(
+  "btn-cancel-delete",
+) as HTMLButtonElement | null;
+const btnConfirmDelete = document.getElementById(
+  "btn-confirm-delete",
+) as HTMLButtonElement | null;
+const deleteLeginfoText = document.getElementById(
+  "delete-leg-info",
+) as HTMLElement | null;
+const confirmClearJourneyDialog = document.getElementById(
+  "confirm-clear-journey-dialog",
+) as HTMLDialogElement | null;
+const btnCancelClear = document.getElementById(
+  "btn-cancel-clear",
+) as HTMLButtonElement | null;
+const btnConfirmClear = document.getElementById(
+  "btn-confirm-clear",
+) as HTMLButtonElement | null;
 const DEBUG_PREFIX = "[train-debug]";
 
 type HyperparamControlConfig = {
@@ -1184,8 +1205,42 @@ btnValidateTrain?.addEventListener("click", () => {
 });
 
 btnClearJourney?.addEventListener("click", () => {
-  document.cookie = "journeyInfo=; path=/; max-age=0";
-  updateUIJourneyListInfo();
+  if (confirmClearJourneyDialog) {
+    confirmClearJourneyDialog.showModal();
+  }
+  
+  const handleCancel = () => {
+    if (confirmClearJourneyDialog) {
+      confirmClearJourneyDialog.close();
+    }
+    if (btnCancelClear) {
+      btnCancelClear.removeEventListener("click", handleCancel);
+    }
+    if (btnConfirmClear) {
+      btnConfirmClear.removeEventListener("click", handleConfirm);
+    }
+  };
+  
+  const handleConfirm = () => {
+    document.cookie = "journeyInfo=; path=/; max-age=0";
+    updateUIJourneyListInfo();
+    if (confirmClearJourneyDialog) {
+      confirmClearJourneyDialog.close();
+    }
+    if (btnCancelClear) {
+      btnCancelClear.removeEventListener("click", handleCancel);
+    }
+    if (btnConfirmClear) {
+      btnConfirmClear.removeEventListener("click", handleConfirm);
+    }
+  };
+  
+  if (btnCancelClear) {
+    btnCancelClear.addEventListener("click", handleCancel);
+  }
+  if (btnConfirmClear) {
+    btnConfirmClear.addEventListener("click", handleConfirm);
+  }
 });
 
 btnSettingsReset?.addEventListener("click", () => {
@@ -1517,17 +1572,124 @@ async function attemptAutoGeolocation(): Promise<void> {
   }
 }
 
+function removeLegFromJourney(legIndex: number): void {
+  const journeyInfo = getCookieJourneyInfo();
+  const legToRemove = journeyInfo[legIndex];
+  
+  if (!legToRemove) return;
+  
+  // Update modal text
+  if (deleteLeginfoText) {
+    const legInfo = `Leg ${legIndex + 1}: ${legToRemove.departureStation} → ${legToRemove.arrivalStation}`;
+    deleteLeginfoText.textContent = legInfo;
+  }
+  
+  // Show modal
+  if (confirmDeleteLegDialog) {
+    confirmDeleteLegDialog.showModal();
+  }
+  
+  // Handle cancel
+  const handleCancel = () => {
+    if (confirmDeleteLegDialog) {
+      confirmDeleteLegDialog.close();
+    }
+    if (btnCancelDelete) {
+      btnCancelDelete.removeEventListener("click", handleCancel);
+    }
+    if (btnConfirmDelete) {
+      btnConfirmDelete.removeEventListener("click", handleConfirm);
+    }
+  };
+  
+  // Handle confirm
+  const handleConfirm = () => {
+    const currentJourneyInfo = getCookieJourneyInfo();
+    const updatedJourney = currentJourneyInfo.filter((_, index) => index !== legIndex);
+    setCookieJourneyInfo(updatedJourney);
+    if (confirmDeleteLegDialog) {
+      confirmDeleteLegDialog.close();
+    }
+    updateUIJourneyListInfo();
+    if (btnCancelDelete) {
+      btnCancelDelete.removeEventListener("click", handleCancel);
+    }
+    if (btnConfirmDelete) {
+      btnConfirmDelete.removeEventListener("click", handleConfirm);
+    }
+  };
+  
+  if (btnCancelDelete) {
+    btnCancelDelete.addEventListener("click", handleCancel);
+  }
+  if (btnConfirmDelete) {
+    btnConfirmDelete.addEventListener("click", handleConfirm);
+  }
+}
+
 function updateUIJourneyListInfo() {
   if (!ulJourneyList) return;
   ulJourneyList.innerHTML = "";
   const journeyInfo = getCookieJourneyInfo();
-  if (!journeyInfo || journeyInfo.length === 0) return;
+  
+  if (!journeyInfo || journeyInfo.length === 0) {
+    const journeyInfoSection = document.getElementById("journey-info-section");
+    if (journeyInfoSection) {
+      journeyInfoSection.setAttribute("hidden", "true");
+    }
+    return;
+  }
+
+  const journeyInfoSection = document.getElementById("journey-info-section");
+  if (journeyInfoSection) {
+    journeyInfoSection.removeAttribute("hidden");
+  }
 
   const fragment = document.createDocumentFragment();
-  journeyInfo.forEach((info) => {
-    const li = document.createElement("li");
-    li.innerText = `${info.departureStation} ${formatTimeOnly(info.departureTime)} → ${info.arrivalStation} ${formatTimeOnly(info.arrivalTime)}`;
-    fragment.appendChild(li);
+  journeyInfo.forEach((info, index) => {
+    const row = document.createElement("tr");
+    
+    // Leg# cell with remove button
+    const legCell = document.createElement("td");
+    const legContainer = document.createElement("div");
+    legContainer.style.cssText = "display: flex; align-items: center; gap: 0.5rem;";
+    
+    const legNumber = document.createElement("span");
+    legNumber.textContent = String(index + 1);
+    legNumber.style.cssText = "flex-shrink: 0; font-weight: bold;";
+    
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.textContent = "✕";
+    deleteButton.style.cssText = "padding: 0.25rem 0.35rem; font-size: 0.875rem; flex-shrink: 0;";
+    deleteButton.title = `Remove leg ${index + 1}`;
+    deleteButton.addEventListener("click", () => {
+      removeLegFromJourney(index);
+    });
+    
+    legContainer.appendChild(legNumber);
+    legContainer.appendChild(deleteButton);
+    legCell.appendChild(legContainer);
+    row.appendChild(legCell);
+    
+    // Other data cells
+    const values = [
+      info.departureStation,
+      info.arrivalStation,
+      [info.trainCategory, info.trainNumber].filter(Boolean).join(""),
+      formatTimeOnly(info.departureTime),
+      formatTimeOnly(info.arrivalTime),
+      info.departurePlatform ?? "—",
+      info.arrivalPlatform ?? "—",
+    ];
+
+    values.forEach((value) => {
+      const cell = document.createElement("td");
+      cell.textContent = value;
+      row.appendChild(cell);
+    });
+
+    fragment.appendChild(row);
   });
   ulJourneyList.appendChild(fragment);
 }
@@ -1818,6 +1980,9 @@ function buildStateFromHistory(history: TrainJourneyInfo[]): JourneyState {
     // Parse the HH:MM:SS string into a today-relative timestamp (seconds)
     const parsed = parseTimeToTimestamp(lastEntry.arrivalTime);
     if (parsed !== null) state.lastDepartureTimestamp = parsed;
+  } else {
+    // No history: use current time as reference for idle duration constraints
+    state.lastDepartureTimestamp = Math.floor(Date.now() / 1000);
   }
 
   return state;

@@ -131,7 +131,7 @@
               </div>
             </div>
           </article>
-          <button id="btn-validate-train">I boarded the train!</button>
+          <button id="btn-validate-train" type="button" style="margin-top: 0.5rem; width: 100%; display: block;">I boarded the train!</button>
         </section>
         <section id="error-section" hidden>
           <h2>Error</h2>
@@ -141,11 +141,27 @@
           <h2>Loading...</h2>
           <p>Please wait while we fetch your next train details.</p>
         </section>
-        <section id="journey-info-section">
+        <section id="journey-info-section" hidden>
           <h2>Your Journey So Far</h2>
-          <ul id="journey-info-list">
-            <!-- Journey details will be appended here -->
-          </ul>
+          <div style="overflow-x: auto;">
+            <table id="journey-info-table" class="striped">
+              <thead>
+                <tr>
+                  <th scope="col">Leg#</th>
+                  <th scope="col">From Station</th>
+                  <th scope="col">To Station</th>
+                  <th scope="col">Train (Line)</th>
+                  <th scope="col">Departure</th>
+                  <th scope="col">Arrival</th>
+                  <th scope="col">Depart Platform</th>
+                  <th scope="col">Arrive Platform</th>
+                </tr>
+              </thead>
+              <tbody id="journey-info-list">
+                <!-- Journey details will be appended here -->
+              </tbody>
+            </table>
+          </div>
         </section>
         <footer>
           <p>May the rails be with you!</p>
@@ -720,6 +736,32 @@
         </form>
       </article>
     </main>
+    <dialog id="confirm-delete-leg-dialog">
+      <article>
+        <header>
+          <h3>Remove Leg?</h3>
+          <button aria-label="Close" rel="prev"></button>
+        </header>
+        <p>Are you sure you want to remove <strong id="delete-leg-info"></strong>?</p>
+        <footer>
+          <button id="btn-cancel-delete" class="secondary">Cancel</button>
+          <button id="btn-confirm-delete">Remove</button>
+        </footer>
+      </article>
+    </dialog>
+    <dialog id="confirm-clear-journey-dialog">
+      <article>
+        <header>
+          <h3>Clear Journey?</h3>
+          <button aria-label="Close" rel="prev"></button>
+        </header>
+        <p>Are you sure you want to clear your entire journey? This action cannot be undone.</p>
+        <footer>
+          <button id="btn-cancel-clear" class="secondary">Cancel</button>
+          <button id="btn-confirm-clear">Clear Journey</button>
+        </footer>
+      </article>
+    </dialog>
     <div id="toast-container" aria-live="polite" aria-atomic="true"></div>
     <footer style="margin-left: 1rem;">
       <p>&copy; 2025 TRAIN GAME <span id="app-version"></span> | <a href="https://github.com/JonathanGuerne/TrainStationGame2" target="_blank" rel="noopener noreferrer">GitHub</a></p>
