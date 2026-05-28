@@ -15,6 +15,12 @@ import {
   deduplicateCandidatesByDestination,
 } from "./candidateSelection";
 
+// Set app version in footer
+const appVersionElement = document.getElementById("app-version");
+if (appVersionElement) {
+  appVersionElement.textContent = `v${__APP_VERSION__}`;
+}
+
 // ============================================================
 // TOAST NOTIFICATIONS
 // ============================================================
