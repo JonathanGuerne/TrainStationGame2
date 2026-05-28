@@ -727,6 +727,42 @@
             </div>
           </fieldset>
 
+          <fieldset>
+            <legend>Station Requirements</legend>
+            <div class="grid">
+              <div>
+                <label for="settings-minStationRouteCount-range">
+                  <strong>minStationRouteCount</strong>
+                  <small id="settings-minStationRouteCount-help">Filter destinations to only stations with this minimum number of unique train routes connected.</small>
+                </label>
+                <div class="grid">
+                  <input
+                    type="range"
+                    id="settings-minStationRouteCount-range"
+                    name="minStationRouteCount"
+                    min="1"
+                    max="30"
+                    step="1"
+                    value="2"
+                    data-default-value="2"
+                    aria-describedby="settings-minStationRouteCount-help settings-minStationRouteCount-current"
+                  />
+                  <input
+                    type="number"
+                    id="settings-minStationRouteCount-input"
+                    min="1"
+                    max="30"
+                    step="1"
+                    value="2"
+                    data-default-value="2"
+                    aria-label="minStationRouteCount precise value"
+                  />
+                  <small>Current value: <output id="settings-minStationRouteCount-current" for="settings-minStationRouteCount-range settings-minStationRouteCount-input">2</output></small>
+                </div>
+              </div>
+            </div>
+          </fieldset>
+
           <footer>
             <div class="grid">
               <button type="button" id="btn-settings-reset" class="secondary">Reset to Defaults</button>

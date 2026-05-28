@@ -13,6 +13,7 @@ export interface HyperparamsData {
   minimumLegDurationPenalty: number;
   stationboardLimit: number;
   minimumLegDuration: number;
+  minStationRouteCount: number;
 }
 
 export const DEFAULT_HYPERPARAMS: HyperparamsData = {
@@ -30,6 +31,7 @@ export const DEFAULT_HYPERPARAMS: HyperparamsData = {
   minimumLegDurationPenalty: 0.8,
   stationboardLimit: 10,
   minimumLegDuration: 10,
+  minStationRouteCount: 2,
 };
 
 const HYPERPARAMS_STORAGE_KEY = "trainGameHyperparams";
@@ -48,6 +50,7 @@ const HYPERPARAM_KEYS: (keyof HyperparamsData)[] = [
   "minimumLegDurationPenalty",
   "stationboardLimit",
   "minimumLegDuration",
+  "minStationRouteCount",
 ];
 
 function isHyperparamsData(value: unknown): value is HyperparamsData {

@@ -360,6 +360,12 @@ const HYPERPARAM_CONTROL_CONFIG: HyperparamControlConfig[] = [
     inputId: "settings-minimumLegDuration-input",
     outputId: "settings-minimumLegDuration-current",
   },
+  {
+    key: "minStationRouteCount",
+    rangeId: "settings-minStationRouteCount-range",
+    inputId: "settings-minStationRouteCount-input",
+    outputId: "settings-minStationRouteCount-current",
+  },
 ];
 
 let hasUnsavedSettingsReset = false;
@@ -2141,6 +2147,7 @@ function getRandomTrainJourney(
     candidates,
     HYPERPARAMS.minIdleDuration,
     HYPERPARAMS.maxIdleDuration,
+    HYPERPARAMS.minStationRouteCount,
     state.lastDepartureTimestamp,
   );
   debugLog(

@@ -5,3 +5,5 @@ testing/api_cache
 *pyc
 *.ipynb
 *.json
+testing/data
+!stop_routes.csv

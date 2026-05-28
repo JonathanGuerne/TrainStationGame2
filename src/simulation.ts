@@ -21,6 +21,7 @@ export type HyperparamsData = {
   minimumLegDurationPenalty: number;
   stationboardLimit: number;
   minimumLegDuration: number;
+  minStationRouteCount: number;
 };
 
 export type SimulationConfig = {
@@ -654,6 +655,7 @@ export async function runSimulation(
         candidates,
         config.hyperparams.minIdleDuration,
         config.hyperparams.maxIdleDuration,
+        config.hyperparams.minStationRouteCount,
         currentReferenceTimestamp,
       );
 

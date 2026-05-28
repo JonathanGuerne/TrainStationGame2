@@ -1,4 +1,5 @@
 import type { PassListItem, TrainStationBoardEntry } from "./index";
+import { getStationRouteCount } from "./stopRoutes";
 
 /** One candidate = one (train × destination-stop) tuple */
 export type JourneyCandidate = {
@@ -11,14 +12,16 @@ export type JourneyCandidate = {
 /**
  * Deduplicate candidates by destination, keeping only the earliest valid departure.
  *
- * Key distinction: Candidates are filtered first based on min/max idle duration constraints.
- * Only candidates with valid wait times (within [minIdleDuration, maxIdleDuration]) are
- * considered for grouping. Then, for each destination, only the earliest valid departure
+ * Key distinction: Candidates are filtered first based on min/max idle duration constraints,
+ * then by minimum station route count. Only candidates with valid wait times 
+ * (within [minIdleDuration, maxIdleDuration]) and sufficient destination connectivity
+ * are considered for grouping. Then, for each destination, only the earliest valid departure
  * is kept.
  *
  * @param candidates - All candidates from buildCandidates()
  * @param minIdleDuration - Minimum idle time (minutes) — departures before this threshold are filtered
  * @param maxIdleDuration - Maximum idle time (minutes) — departures after this threshold are filtered
+ * @param minStationRouteCount - Minimum number of unique routes connected to destination station
  * @param referenceTimestamp - Reference time in seconds (Unix-like). Used to calculate idle duration.
  * @returns Deduplicated candidates with at most one candidate per destination
  */
@@ -26,12 +29,13 @@ export function deduplicateCandidatesByDestination(
   candidates: JourneyCandidate[],
   minIdleDuration: number,
   maxIdleDuration: number,
+  minStationRouteCount: number,
   referenceTimestamp: number | null,
 ): JourneyCandidate[] {
   if (!referenceTimestamp) {
     // If no reference time, can't calculate wait duration, so group by destination without filtering
     // console.debug(`[Dedup] No referenceTimestamp provided, grouping ${candidates.length} candidates by destination without idle filter`);
-    return filterByDestination(candidates);
+    return filterByDestination(candidates, minStationRouteCount);
   }
 
   const candidateDetails = candidates.map((candidate, idx) => {
@@ -93,7 +97,7 @@ export function deduplicateCandidatesByDestination(
   // console.debug(`[Dedup] After idle filter: ${validCandidates.length}/${candidates.length} candidates remain`);
 
   // Group valid candidates by destination and keep earliest
-  const dedupResult = filterByDestination(validCandidates);
+  const dedupResult = filterByDestination(validCandidates, minStationRouteCount);
   // console.debug(`[Dedup] After destination deduplication: ${dedupResult.length} candidates`, 
   //   dedupResult.map(c => ({
   //     train: c.train.number,
@@ -108,13 +112,22 @@ export function deduplicateCandidatesByDestination(
 
 /**
  * Helper: Group candidates by destination and keep only the earliest departure for each.
+ * Also filters by minimum station route count.
  */
-function filterByDestination(candidates: JourneyCandidate[]): JourneyCandidate[] {
+function filterByDestination(candidates: JourneyCandidate[], minStationRouteCount: number): JourneyCandidate[] {
   const byDestination = new Map<string | undefined, JourneyCandidate>();
   const destinationCounts = new Map<string | undefined, number>();
 
   for (const candidate of candidates) {
     const destinationId = candidate.stop.station?.id;
+    const destinationName = candidate.stop.station?.name;
+    
+    // Check if destination meets minimum route count requirement
+    const routeCount = getStationRouteCount(destinationName);
+    if (routeCount < minStationRouteCount) {
+      continue; // Skip this candidate if destination doesn't have enough routes
+    }
+
     destinationCounts.set(destinationId, (destinationCounts.get(destinationId) ?? 0) + 1);
 
     if (!byDestination.has(destinationId)) {
