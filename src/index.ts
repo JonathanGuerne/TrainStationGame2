@@ -1739,6 +1739,7 @@ async function displayStationSearchResults(stations: TrainStation[]): Promise<vo
 
 function selectStation(station: TrainStation): void {
   selectedManualStation = station;
+  cachedStartStation = null; // Clear any cached geolocation-based station
   if (gameStationInput) {
     gameStationInput.value = station.name;
   }
