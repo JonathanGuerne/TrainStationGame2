@@ -144,6 +144,7 @@ const arrivalPlatformLine = document.getElementById(
 ) as HTMLElement | null;
 const btnReloadTrain = document.getElementById("btn-reload-train") as HTMLButtonElement | null;
 const sectionError = document.getElementById("error-section");
+const sectionErrorMessage = document.getElementById("error-message") as HTMLElement | null;
 const sectionTrainDetails = document.getElementById("train-details-section");
 const sectionLoading = document.getElementById("loading-section");
 const btnValidateTrain = document.getElementById("btn-validate-train");
@@ -1462,6 +1463,11 @@ function updateUITrain() {
     .catch((error) => {
       sectionLoading?.setAttribute("hidden", "true");
       sectionError?.removeAttribute("hidden");
+      if (sectionErrorMessage) {
+        const message = error instanceof Error ? error.message : String(error);
+        const stack = error instanceof Error && error.stack ? `\n\nStack trace:\n${error.stack}` : "";
+        sectionErrorMessage.textContent = message + stack;
+      }
       
       // Restore button states on error
       if (btnGameUseLocation) {
@@ -1472,11 +1478,6 @@ function updateUITrain() {
         btnReloadTrain.disabled = false;
         btnReloadTrain.textContent = "🔄 Reload Train";
       }
-      
-      // console.error(
-      //   `${DEBUG_PREFIX} Reload train failed after ${formatDurationMs(reloadStartedAt)}`,
-      //   error,
-      // );
     });
   updateUIJourneyListInfo();
 }
@@ -1496,10 +1497,11 @@ function reloadTrain() {
     .catch((error) => {
       sectionLoading?.setAttribute("hidden", "true");
       sectionError?.removeAttribute("hidden");
-      // console.error(
-      //   `${DEBUG_PREFIX} Reload train failed after ${formatDurationMs(reloadStartedAt)}`,
-      //   error,
-      // );
+      if (sectionErrorMessage) {
+        const message = error instanceof Error ? error.message : String(error);
+        const stack = error instanceof Error && error.stack ? `\n\nStack trace:\n${error.stack}` : "";
+        sectionErrorMessage.textContent = message + stack;
+      }
     });
   updateUIJourneyListInfo();
 }
