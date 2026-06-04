@@ -1935,7 +1935,7 @@ async function fetchNextTrain(
   const stationboardFetchStartedAt = performance.now();
   debugLog("Fetching stationboard", { stationId });
   const response = await fetch(
-    `https://transport.opendata.ch/v1/stationboard?id=${stationId}&limit=10`,
+    `https://transport.opendata.ch/v1/stationboard?id=${stationId}&limit=100`,
   );
   if (!response.ok) throw new Error("Failed to fetch next train data.");
   debugLog(
