@@ -78,7 +78,7 @@ type SimulationState = {
 const API_DELAY_MS = 500;
 const MAX_SELECTION_ATTEMPTS = 5;
 const PREFERRED_CATEGORIES = ["IC", "ICE", "IR", "EC", "TGV", "RE", "RJX"];
-const LEGACY_SIMULATION_MIN_STATION_ROUTE_COUNT = 0;
+const SIMULATION_MIN_STATION_ROUTE_COUNT = 0;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
@@ -656,7 +656,7 @@ export async function runSimulation(
         candidates,
         config.hyperparams.minIdleDuration,
         config.hyperparams.maxIdleDuration,
-        LEGACY_SIMULATION_MIN_STATION_ROUTE_COUNT,
+        SIMULATION_MIN_STATION_ROUTE_COUNT,
         currentReferenceTimestamp,
       );
 
