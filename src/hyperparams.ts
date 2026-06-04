@@ -29,7 +29,7 @@ export const DEFAULT_HYPERPARAMS: HyperparamsData = {
   preferredCategoryFactor: 0.4,
   shortJourneyLegPenalty: 0.7,
   minimumLegDurationPenalty: 0.8,
-  stationboardLimit: 10,
+  stationboardLimit: 100,
   minimumLegDuration: 10,
   minStationRouteCount: 2,
 };
