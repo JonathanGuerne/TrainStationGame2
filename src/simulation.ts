@@ -78,7 +78,6 @@ type SimulationState = {
 const API_DELAY_MS = 500;
 const MAX_SELECTION_ATTEMPTS = 5;
 const PREFERRED_CATEGORIES = ["IC", "ICE", "IR", "EC", "TGV", "RE", "RJX"];
-const SIMULATION_MIN_STATION_ROUTE_COUNT = 0;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
@@ -576,7 +575,9 @@ export async function runSimulation(
       break;
     }
 
-    // Calculate reference timestamp (in seconds) for deduplication
+    // Simulation anchor: always use the current simulation timeline (start time, then each selected leg arrival),
+    // never wall-clock "now".
+    // Calculate reference timestamp (in seconds) from current simulation time for idle filtering/deduplication.
     currentReferenceTimestamp = Math.floor(currentDate.getTime() / 1000);
 
     // console.debug(`[Iteration ${iterationCount}] Timestamp validation:`, {
@@ -656,7 +657,7 @@ export async function runSimulation(
         candidates,
         config.hyperparams.minIdleDuration,
         config.hyperparams.maxIdleDuration,
-        SIMULATION_MIN_STATION_ROUTE_COUNT,
+        config.hyperparams.minStationRouteCount,
         currentReferenceTimestamp,
       );
 
@@ -878,6 +879,7 @@ export async function runSimulation(
 
         currentStationName = arrivalStationName;
         currentStationId = arrivalStationId;
+        // Advance the simulation clock to the selected leg arrival.
         currentTime = arrivalTime;
         currentCoordinates = arrivalCoordinates;
         routeFound = true;

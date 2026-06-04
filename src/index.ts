@@ -1982,7 +1982,8 @@ function buildStateFromHistory(history: TrainJourneyInfo[]): JourneyState {
       state.usedTransportCategories.add(entry.trainCategory);
   }
 
-  // In game mode, idle filtering is anchored to "now", not prior leg arrival date.
+  // Game mode is anchored to "now".
+  // (Simulation mode is different: it advances from the configured start time to each selected leg arrival.)
   state.lastDepartureTimestamp = Math.floor(Date.now() / 1000);
 
   return state;
