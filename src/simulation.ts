@@ -575,7 +575,9 @@ export async function runSimulation(
       break;
     }
 
-    // Calculate reference timestamp (in seconds) for deduplication
+    // Simulation anchor: always use the current simulation timeline (start time, then each selected leg arrival),
+    // never wall-clock "now".
+    // Calculate reference timestamp (in seconds) from current simulation time for idle filtering/deduplication.
     currentReferenceTimestamp = Math.floor(currentDate.getTime() / 1000);
 
     // console.debug(`[Iteration ${iterationCount}] Timestamp validation:`, {
@@ -877,6 +879,7 @@ export async function runSimulation(
 
         currentStationName = arrivalStationName;
         currentStationId = arrivalStationId;
+        // Advance the simulation clock to the selected leg arrival.
         currentTime = arrivalTime;
         currentCoordinates = arrivalCoordinates;
         routeFound = true;

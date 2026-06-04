@@ -1982,35 +1982,11 @@ function buildStateFromHistory(history: TrainJourneyInfo[]): JourneyState {
       state.usedTransportCategories.add(entry.trainCategory);
   }
 
-  // Use the departure timestamp of the most recent leg as the idle reference
-  const lastEntry = history[history.length - 1];
-  if (lastEntry) {
-    // The arrival time of the last leg is the earliest we can depart again
-    // Parse the HH:MM:SS string into a today-relative timestamp (seconds)
-    const parsed = parseTimeToTimestamp(lastEntry.arrivalTime);
-    if (parsed !== null) state.lastDepartureTimestamp = parsed;
-  } else {
-    // No history: use current time as reference for idle duration constraints
-    state.lastDepartureTimestamp = Math.floor(Date.now() / 1000);
-  }
+  // Game mode is anchored to "now".
+  // (Simulation mode is different: it advances from the configured start time to each selected leg arrival.)
+  state.lastDepartureTimestamp = Math.floor(Date.now() / 1000);
 
   return state;
-}
-
-/**
- * Parse a "HH:MM:SS" or "HH:MM" time string into a Unix-like seconds value
- * anchored to today. Returns null on failure.
- */
-function parseTimeToTimestamp(timeStr: string): number | null {
-  const parts = timeStr.split(":").map(Number);
-  if (parts.length < 2 || parts.some(isNaN)) return null;
-  const h = parts[0];
-  const m = parts[1];
-  const s = parts[2] ?? 0;
-  if (h === undefined || m === undefined) return null;
-  const now = new Date();
-  now.setHours(h, m, s, 0);
-  return Math.floor(now.getTime() / 1000);
 }
 
 // ============================================================
